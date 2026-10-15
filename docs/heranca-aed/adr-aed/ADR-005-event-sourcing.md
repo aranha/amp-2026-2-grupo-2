@@ -46,7 +46,7 @@ O que mantemos do princípio append-only:
   reconstrói a agregação por janela do zero, e o agregador deduplica por `ce_id` para que
   reentregas não contem duas vezes.
 
-O que recusamos, e o registro está em [`docs/IA.md`](../IA.md): tornar a Solicitação de
+O que recusamos, e o registro está em [`docs/IA.md`](../IA-aed.md): tornar a Solicitação de
 Crédito um agregado event sourced, com event store append-only e projeção reconstruída por
 replay. A pergunta que motivou a sugestão — *em que passo está esta solicitação* — é
 respondida por dois campos de status, e o custo de um segundo modelo de persistência não se
@@ -69,7 +69,7 @@ paga contra isso.
 
 - **CQRS com projeção persistida do agregador.** Gravar o volume por janela numa tabela em
   vez de mantê-lo em memória. **Não recusada — adiada.** Está nomeada como trabalho futuro
-  na seção 8 do [`arquitetura.md`](../arquitetura.md), e é o que permitiria escalar o
+  na seção 8 do [`arquitetura.md`](../arquitetura-aed.md), e é o que permitiria escalar o
   agregador para mais de uma instância.
 
 ## Consequências aceitas

@@ -1,6 +1,6 @@
 # Arquitetura do sistema de concessão de crédito
 
-Este documento explica o sistema para quem vai mantê-lo sem ter participado das decisões: o que ele faz, como os serviços conversam, o que acontece quando algo falha, onde ele trava quando cresce e o que ficou de fora. Para subir o ambiente e rodar os testes, veja o [README](../README.md).
+Este documento explica o sistema para quem vai mantê-lo sem ter participado das decisões: o que ele faz, como os serviços conversam, o que acontece quando algo falha, onde ele trava quando cresce e o que ficou de fora. Para subir o ambiente e rodar os testes, veja o [README](../../README.md).
 
 ## 1. O domínio
 
@@ -18,7 +18,7 @@ O sistema responde a duas perguntas de negócio:
 - **Em que pé está esta solicitação?** Pendente de desfecho, com limite reservado, ou com a reserva cancelada e o limite devolvido. A resposta está em `analise_credito.status` e em `reserva_limite.status`.
 - **Qual foi o volume de crédito solicitado a cada janela de 5 minutos?** Quantidade e valor total por janela, pela hora em que a solicitação ocorreu. A resposta sai no log do `servico-risco`.
 
-Neste recorte estão implementados os passos 1, 3 e 4 até a compensação. A avaliação de elegibilidade, a proposta, o contrato e o desembolso estão fora do código; os eventos que eles publicariam são publicados à mão pela Kafka UI para exercitar a saga. A justificativa do domínio está na [ADR-002](adr/ADR-002-dominio.md).
+Neste recorte estão implementados os passos 1, 3 e 4 até a compensação. A avaliação de elegibilidade, a proposta, o contrato e o desembolso estão fora do código; os eventos que eles publicariam são publicados à mão pela Kafka UI para exercitar a saga. A justificativa do domínio está na [ADR-002](adr-aed/ADR-002-dominio.md).
 
 ## 2. Os eventos
 
@@ -26,18 +26,18 @@ Cada evento é um fato consumado, com nome no particípio e na linguagem do dom�
 
 | Evento | Tópico | Publicado por | Consumido por | Contrato |
 |---|---|---|---|---|
-| CreditoSolicitado | `credito.solicitacao.solicitada.v1` | `servico-credito` | `servico-risco` (dois grupos) | [contrato.md](contrato.md) |
+| CreditoSolicitado | `credito.solicitacao.solicitada.v1` | `servico-credito` | `servico-risco` (dois grupos) | [contrato.md](contratos-de-evento.md) |
 | ElegibilidadeAprovada | `credito.elegibilidade.aprovada.v1` | fora do recorte (Kafka UI) | `servico-credito` | [contratos-da-saga.md](contratos-da-saga.md#elegibilidadeaprovada) |
 | LimiteDeCreditoReservado | `credito.limite.reservado.v1` | `servico-credito` | `servico-risco` | [contratos-da-saga.md](contratos-da-saga.md#limitedecreditoreservado) |
 | PropostaDeCreditoRecusada | `credito.proposta.recusada.v1` | fora do recorte (Kafka UI) | `servico-credito` | [contratos-da-saga.md](contratos-da-saga.md#propostadecreditorecusada) |
 | PropostaDeCreditoExpirada | `credito.proposta.expirada.v1` | fora do recorte (Kafka UI) | `servico-credito` | [contratos-da-saga.md](contratos-da-saga.md#propostadecreditoexpirada) |
-| ReservaDeLimiteCancelada | `credito.reserva-limite.cancelada.v1` | `servico-credito` | `servico-risco` | [contrato.md](contrato.md#evento-de-compensação-reservadelimitecancelada) |
+| ReservaDeLimiteCancelada | `credito.reserva-limite.cancelada.v1` | `servico-credito` | `servico-risco` | [contrato.md](contratos-de-evento.md#evento-de-compensação-reservadelimitecancelada) |
 
 Todos usam envelope CloudEvents 1.0 em modo binário: `ce_specversion`, `ce_id`, `ce_source`, `ce_type` e `ce_time` nos cabeçalhos, carga JSON no corpo. O `ce_id` é igual ao `eventoId` da carga e é a chave de deduplicação de todos os consumidores. Datas vão como texto ISO-8601 com offset, nunca como epoch.
 
 `ReservaDeLimiteCancelada` é o evento de compensação: ele não apaga nem reescreve a reserva, registra um fato novo que desfaz o efeito dela.
 
-Cada serviço declara a própria classe de cada evento, só com os campos que usa, e ignora os campos que não conhece; não há biblioteca de contrato compartilhada. O contrato é o JSON no tópico. A regra de compatibilidade é **FULL** para todos os eventos: campo novo entra como opcional, e nada existente é removido, renomeado ou muda de tipo ou de significado dentro da `v1`. Ela permite que produtores e consumidores subam em qualquer ordem, porque os dois serviços têm deploy independente ([contrato.md](contrato.md#contexto-organizacional-da-regra-de-compatibilidade)). Uma mudança de significado exige um tipo `v2` publicado em paralelo.
+Cada serviço declara a própria classe de cada evento, só com os campos que usa, e ignora os campos que não conhece; não há biblioteca de contrato compartilhada. O contrato é o JSON no tópico. A regra de compatibilidade é **FULL** para todos os eventos: campo novo entra como opcional, e nada existente é removido, renomeado ou muda de tipo ou de significado dentro da `v1`. Ela permite que produtores e consumidores subam em qualquer ordem, porque os dois serviços têm deploy independente ([contrato.md](contratos-de-evento.md#contexto-organizacional-da-regra-de-compatibilidade)). Uma mudança de significado exige um tipo `v2` publicado em paralelo.
 
 ## 3. O desenho
 
@@ -132,14 +132,14 @@ O caminho de uma solicitação, com os números do teste de compensação:
 
 | ADR | Decisão | Consequência aceita |
 |---|---|---|
-| [ADR-002](adr/ADR-002-dominio.md) | Concessão de crédito como domínio, com a reserva de limite e sua compensação como caminho de exceção, e deduplicação por `ce_id` | O estado de propostas de longa duração e a idempotência do desembolso passam a ser responsabilidade do sistema, e os sistemas externos (bureau, antifraude, Core Bancário) ficam simulados |
-| [ADR-003](adr/ADR-003-chave-de-particao.md) | `solicitacaoId` como chave de partição, garantindo a ordem dos eventos de uma mesma solicitação | Agregar por qualquer outra dimensão — cliente ou canal — exige republicar o fluxo num tópico repartido, e o agregador só fecha correto com uma instância lendo as três partições |
-| [ADR-005](adr/ADR-005-event-sourcing.md) | Estado guardado em tabelas, e não reconstruído por replay de um event store; o log permanece append-only para os fatos | Perguntas novas sobre o passado só são respondidas se o dado tiver sido guardado na época, e os tópicos têm sete dias de retenção — o log não é arquivo |
-| [ADR-006](adr/ADR-006-resiliencia.md) | Retentativa limitada e bloqueante, DLQ por tópico com motivo e classificação, reprocessamento manual, compensação idempotente e saga coreografada | Uma partição fica parada enquanto um registro retenta, e uma compensação que cai na DLQ deixa o limite preso até alguém reprocessá-la |
+| [ADR-002](adr-aed/ADR-002-dominio.md) | Concessão de crédito como domínio, com a reserva de limite e sua compensação como caminho de exceção, e deduplicação por `ce_id` | O estado de propostas de longa duração e a idempotência do desembolso passam a ser responsabilidade do sistema, e os sistemas externos (bureau, antifraude, Core Bancário) ficam simulados |
+| [ADR-003](adr-aed/ADR-003-chave-de-particao.md) | `solicitacaoId` como chave de partição, garantindo a ordem dos eventos de uma mesma solicitação | Agregar por qualquer outra dimensão — cliente ou canal — exige republicar o fluxo num tópico repartido, e o agregador só fecha correto com uma instância lendo as três partições |
+| [ADR-005](adr-aed/ADR-005-event-sourcing.md) | Estado guardado em tabelas, e não reconstruído por replay de um event store; o log permanece append-only para os fatos | Perguntas novas sobre o passado só são respondidas se o dado tiver sido guardado na época, e os tópicos têm sete dias de retenção — o log não é arquivo |
+| [ADR-006](adr-aed/ADR-006-resiliencia.md) | Retentativa limitada e bloqueante, DLQ por tópico com motivo e classificação, reprocessamento manual, compensação idempotente e saga coreografada | Uma partição fica parada enquanto um registro retenta, e uma compensação que cai na DLQ deixa o limite preso até alguém reprocessá-la |
 
 ## 5. Quando falha
 
-**Retentativa limitada.** Os consumidores dos dois serviços seguem a mesma política ([ADR-006](adr/ADR-006-resiliencia.md)). Uma falha **transitória** (banco indisponível, ou um evento que chegou antes daquele de que depende) é retentada quatro vezes, com espera de 0,5 s, 1 s, 2 s e 4 s. Uma falha **permanente** (payload que não desserializa, `ce_id` ausente, violação de integridade, cliente sem limite cadastrado ou com limite insuficiente) não é retentada, porque repetir produz o mesmo erro. A retentativa é bloqueante: enquanto um registro retenta, os seguintes da mesma partição esperam, e é isso que preserva a ordem por `solicitacaoId`.
+**Retentativa limitada.** Os consumidores dos dois serviços seguem a mesma política ([ADR-006](adr-aed/ADR-006-resiliencia.md)). Uma falha **transitória** (banco indisponível, ou um evento que chegou antes daquele de que depende) é retentada quatro vezes, com espera de 0,5 s, 1 s, 2 s e 4 s. Uma falha **permanente** (payload que não desserializa, `ce_id` ausente, violação de integridade, cliente sem limite cadastrado ou com limite insuficiente) não é retentada, porque repetir produz o mesmo erro. A retentativa é bloqueante: enquanto um registro retenta, os seguintes da mesma partição esperam, e é isso que preserva a ordem por `solicitacaoId`.
 
 **DLQ por tópico.** Esgotadas as tentativas, ou na primeira falha permanente, o registro vai para `<tópico>.dlq` com a mesma chave, os cabeçalhos `ce_*` originais, o motivo e a origem (`kafka_dlt-exception-*`, `kafka_dlt-original-*`) e a classificação (`classificacao`: `PERMANENTE` ou `TRANSITORIA`). O offset do registro original é confirmado e a partição segue.
 
