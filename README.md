@@ -9,6 +9,10 @@ observabilidade.
 Comece por **[docs/plano-de-trabalho.md](docs/plano-de-trabalho.md)** — a arquitetura e o porquê
 de cada escolha.
 
+**Acompanhar o progresso:** [issue #1 — Checklist de entrega](../../issues/1), com os 113 itens do
+enunciado em task lists. O GitHub conta o progresso sozinho; marcar exige ser colaborador do
+repositório.
+
 | Documento | Para quê |
 |---|---|
 | [Plano de trabalho](docs/plano-de-trabalho.md) | Arquitetura alvo, trade-offs e cronograma |
