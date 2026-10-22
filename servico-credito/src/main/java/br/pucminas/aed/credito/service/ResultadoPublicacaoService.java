@@ -1,19 +1,28 @@
+
 package br.pucminas.aed.credito.service;
 
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.kafka.support.SendResult;
 import org.springframework.stereotype.Service;
 
 @Service
-@Slf4j
 public class ResultadoPublicacaoService {
-    public <T> void registrar(String eventoId, SendResult<String, T> resultado,
+
+    private static final Logger log =
+            LoggerFactory.getLogger(ResultadoPublicacaoService.class);
+
+    public <T> void registrar(String eventoId,
+                              SendResult<String, T> resultado,
                               Throwable falha) {
         if (falha != null) {
             log.error("Falha ao publicar o evento {}", eventoId, falha);
             return;
         }
-        log.info("Evento {} publicado na particao {} e offset {}", eventoId,
-                resultado.getRecordMetadata().partition(), resultado.getRecordMetadata().offset());
+
+        log.info("Evento {} publicado na particao {} e offset {}",
+                eventoId,
+                resultado.getRecordMetadata().partition(),
+                resultado.getRecordMetadata().offset());
     }
 }
