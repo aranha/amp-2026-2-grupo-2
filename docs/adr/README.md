@@ -16,7 +16,7 @@ Template: [ADR-000-template.md](ADR-000-template.md)
 | 006 | Kafka como barramento: Observer, partições e consumer groups | Hugo | ☐ |
 | 007 | CloudEvents e regra de compatibilidade de contrato | Marcus | ☐ |
 | 008 | BFF: agregação, resiliência e versionamento de API | Paulo | ☐ |
-| 009 | Keycloak, OAuth2/OIDC e PKCE | Rafael | ☐ |
+| [009](ADR-009-keycloak-oauth2-oidc-pkce.md) | Keycloak, OAuth2/OIDC e PKCE | Rafael | ✅ |
 | 010 | OpenTelemetry e Loki em vez de ELK | Sesaque | ☐ |
 | 011 | Docker multi-stage, Kubernetes e CI/CD | Sesaque + Guilherme | ☐ |
 
