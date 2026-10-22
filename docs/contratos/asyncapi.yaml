@@ -1,0 +1,412 @@
+# CONTRATO PROPOSTO — alinhar payloads com Guilherme, Hugo e Marcus antes de produção.
+# Novo fluxo v1: não substitui automaticamente os tópicos da saga AED herdada.
+asyncapi: 3.0.0
+info:
+  title: Contrato de eventos — Plataforma de Crédito
+  version: 1.0.0
+  description: Contrato PROPOSTO da Sprint 0. Campos de serviços Risco, Antifraude e Contratação requerem aceite
+    dos respectivos responsáveis antes de produção.
+defaultContentType: application/json
+servers:
+  kafka:
+    host: localhost:9092
+    protocol: kafka
+    description: Broker local; alterar conforme ambiente.
+channels:
+  credito_solicitacao_v1:
+    address: credito.solicitacao.v1
+    description: 'Produtor: servico-credito. Consumidores: servico-risco. Kafka key: solicitacaoId; 3 partições
+      planejadas.'
+    messages:
+      SolicitacaoCriada:
+        $ref: '#/components/messages/SolicitacaoCriada'
+  risco_elegibilidade_v1:
+    address: risco.elegibilidade.v1
+    description: 'Produtor: servico-risco. Consumidores: servico-credito, servico-antifraude. Kafka key: solicitacaoId;
+      3 partições planejadas.'
+    messages:
+      ElegibilidadeAvaliada:
+        $ref: '#/components/messages/ElegibilidadeAvaliada'
+  antifraude_analise_v1:
+    address: antifraude.analise.v1
+    description: 'Produtor: servico-antifraude. Consumidores: servico-credito. Kafka key: solicitacaoId; 3 partições
+      planejadas.'
+    messages:
+      AnaliseAntifraudeConcluida:
+        $ref: '#/components/messages/AnaliseAntifraudeConcluida'
+  credito_proposta_v1:
+    address: credito.proposta.v1
+    description: 'Produtor: servico-credito. Consumidores: servico-contratacao. Kafka key: solicitacaoId; 3 partições
+      planejadas.'
+    messages:
+      PropostaDisponibilizada:
+        $ref: '#/components/messages/PropostaDisponibilizada'
+  contratacao_contrato_v1:
+    address: contratacao.contrato.v1
+    description: 'Produtor: servico-contratacao. Consumidores: servico-credito. Kafka key: solicitacaoId; 3 partições
+      planejadas.'
+    messages:
+      ContratoAtualizado:
+        $ref: '#/components/messages/ContratoAtualizado'
+  contratacao_liberacao_v1:
+    address: contratacao.liberacao.v1
+    description: 'Produtor: servico-contratacao. Consumidores: servico-credito. Kafka key: solicitacaoId; 3 partições
+      planejadas.'
+    messages:
+      LiberacaoAtualizada:
+        $ref: '#/components/messages/LiberacaoAtualizada'
+operations:
+  publish_credito_solicitacao_v1:
+    action: send
+    channel:
+      $ref: '#/channels/credito_solicitacao_v1'
+    summary: servico-credito produz credito.solicitacao.v1
+    messages:
+    - $ref: '#/channels/credito_solicitacao_v1/messages/SolicitacaoCriada'
+  consume_risco_credito_solicitacao_v1:
+    action: receive
+    channel:
+      $ref: '#/channels/credito_solicitacao_v1'
+    summary: servico-risco consome credito.solicitacao.v1
+    messages:
+    - $ref: '#/channels/credito_solicitacao_v1/messages/SolicitacaoCriada'
+  publish_risco_elegibilidade_v1:
+    action: send
+    channel:
+      $ref: '#/channels/risco_elegibilidade_v1'
+    summary: servico-risco produz risco.elegibilidade.v1
+    messages:
+    - $ref: '#/channels/risco_elegibilidade_v1/messages/ElegibilidadeAvaliada'
+  consume_credito_risco_elegibilidade_v1:
+    action: receive
+    channel:
+      $ref: '#/channels/risco_elegibilidade_v1'
+    summary: servico-credito consome risco.elegibilidade.v1
+    messages:
+    - $ref: '#/channels/risco_elegibilidade_v1/messages/ElegibilidadeAvaliada'
+  consume_antifraude_risco_elegibilidade_v1:
+    action: receive
+    channel:
+      $ref: '#/channels/risco_elegibilidade_v1'
+    summary: servico-antifraude consome risco.elegibilidade.v1
+    messages:
+    - $ref: '#/channels/risco_elegibilidade_v1/messages/ElegibilidadeAvaliada'
+  publish_antifraude_analise_v1:
+    action: send
+    channel:
+      $ref: '#/channels/antifraude_analise_v1'
+    summary: servico-antifraude produz antifraude.analise.v1
+    messages:
+    - $ref: '#/channels/antifraude_analise_v1/messages/AnaliseAntifraudeConcluida'
+  consume_credito_antifraude_analise_v1:
+    action: receive
+    channel:
+      $ref: '#/channels/antifraude_analise_v1'
+    summary: servico-credito consome antifraude.analise.v1
+    messages:
+    - $ref: '#/channels/antifraude_analise_v1/messages/AnaliseAntifraudeConcluida'
+  publish_credito_proposta_v1:
+    action: send
+    channel:
+      $ref: '#/channels/credito_proposta_v1'
+    summary: servico-credito produz credito.proposta.v1
+    messages:
+    - $ref: '#/channels/credito_proposta_v1/messages/PropostaDisponibilizada'
+  consume_contratacao_credito_proposta_v1:
+    action: receive
+    channel:
+      $ref: '#/channels/credito_proposta_v1'
+    summary: servico-contratacao consome credito.proposta.v1
+    messages:
+    - $ref: '#/channels/credito_proposta_v1/messages/PropostaDisponibilizada'
+  publish_contratacao_contrato_v1:
+    action: send
+    channel:
+      $ref: '#/channels/contratacao_contrato_v1'
+    summary: servico-contratacao produz contratacao.contrato.v1
+    messages:
+    - $ref: '#/channels/contratacao_contrato_v1/messages/ContratoAtualizado'
+  consume_credito_contratacao_contrato_v1:
+    action: receive
+    channel:
+      $ref: '#/channels/contratacao_contrato_v1'
+    summary: servico-credito consome contratacao.contrato.v1
+    messages:
+    - $ref: '#/channels/contratacao_contrato_v1/messages/ContratoAtualizado'
+  publish_contratacao_liberacao_v1:
+    action: send
+    channel:
+      $ref: '#/channels/contratacao_liberacao_v1'
+    summary: servico-contratacao produz contratacao.liberacao.v1
+    messages:
+    - $ref: '#/channels/contratacao_liberacao_v1/messages/LiberacaoAtualizada'
+  consume_credito_contratacao_liberacao_v1:
+    action: receive
+    channel:
+      $ref: '#/channels/contratacao_liberacao_v1'
+    summary: servico-credito consome contratacao.liberacao.v1
+    messages:
+    - $ref: '#/channels/contratacao_liberacao_v1/messages/LiberacaoAtualizada'
+components:
+  messages:
+    SolicitacaoCriada:
+      name: SolicitacaoCriada
+      title: credito.solicitacao.v1
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/CloudEventsHeaders'
+      payload:
+        type: object
+        required:
+        - eventoId
+        - solicitacaoId
+        - clienteId
+        - valorSolicitado
+        - dataSolicitacao
+        - canalOrigem
+        properties:
+          eventoId:
+            type: string
+            format: uuid
+          solicitacaoId:
+            type: string
+            format: uuid
+          clienteId:
+            type: string
+          valorSolicitado:
+            type: number
+            multipleOf: 0.01
+            description: BRL; serializar como número decimal, sem arredondamento binário no domínio
+          dataSolicitacao:
+            type: string
+            format: date-time
+          canalOrigem:
+            type: string
+        additionalProperties: true
+      description: ce_type = credito.solicitacao.v1; ce_id = eventoId; Kafka key = solicitacaoId. Campos de payload
+        sujeitos à validação conjunta.
+    ElegibilidadeAvaliada:
+      name: ElegibilidadeAvaliada
+      title: risco.elegibilidade.v1
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/CloudEventsHeaders'
+      payload:
+        type: object
+        required:
+        - eventoId
+        - solicitacaoId
+        - elegivel
+        - valorAprovado
+        - dataAnalise
+        properties:
+          eventoId:
+            type: string
+            format: uuid
+          solicitacaoId:
+            type: string
+            format: uuid
+          elegivel:
+            type: boolean
+          valorAprovado:
+            type: number
+            multipleOf: 0.01
+            description: BRL; serializar como número decimal, sem arredondamento binário no domínio
+          motivo:
+            type: string
+          dataAnalise:
+            type: string
+            format: date-time
+        additionalProperties: true
+      description: ce_type = risco.elegibilidade.v1; ce_id = eventoId; Kafka key = solicitacaoId. Campos de payload
+        sujeitos à validação conjunta.
+    AnaliseAntifraudeConcluida:
+      name: AnaliseAntifraudeConcluida
+      title: antifraude.analise.v1
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/CloudEventsHeaders'
+      payload:
+        type: object
+        required:
+        - eventoId
+        - solicitacaoId
+        - aprovada
+        - score
+        - dataAnalise
+        properties:
+          eventoId:
+            type: string
+            format: uuid
+          solicitacaoId:
+            type: string
+            format: uuid
+          aprovada:
+            type: boolean
+          score:
+            type: integer
+          motivo:
+            type: string
+          dataAnalise:
+            type: string
+            format: date-time
+        additionalProperties: true
+      description: ce_type = antifraude.analise.v1; ce_id = eventoId; Kafka key = solicitacaoId. Campos de payload
+        sujeitos à validação conjunta.
+    PropostaDisponibilizada:
+      name: PropostaDisponibilizada
+      title: credito.proposta.v1
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/CloudEventsHeaders'
+      payload:
+        type: object
+        required:
+        - eventoId
+        - solicitacaoId
+        - propostaId
+        - valorAprovado
+        - taxaJurosMensal
+        - prazoMeses
+        - valorParcela
+        - dataProposta
+        properties:
+          eventoId:
+            type: string
+            format: uuid
+          solicitacaoId:
+            type: string
+            format: uuid
+          propostaId:
+            type: string
+            format: uuid
+          valorAprovado:
+            type: number
+            multipleOf: 0.01
+            description: BRL; serializar como número decimal, sem arredondamento binário no domínio
+          taxaJurosMensal:
+            type: number
+            multipleOf: 0.01
+            description: BRL; serializar como número decimal, sem arredondamento binário no domínio
+          prazoMeses:
+            type: integer
+          valorParcela:
+            type: number
+            multipleOf: 0.01
+            description: BRL; serializar como número decimal, sem arredondamento binário no domínio
+          dataProposta:
+            type: string
+            format: date-time
+        additionalProperties: true
+      description: ce_type = credito.proposta.v1; ce_id = eventoId; Kafka key = solicitacaoId. Campos de payload
+        sujeitos à validação conjunta.
+    ContratoAtualizado:
+      name: ContratoAtualizado
+      title: contratacao.contrato.v1
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/CloudEventsHeaders'
+      payload:
+        type: object
+        required:
+        - eventoId
+        - solicitacaoId
+        - contratoId
+        - propostaId
+        - status
+        - dataContrato
+        properties:
+          eventoId:
+            type: string
+            format: uuid
+          solicitacaoId:
+            type: string
+            format: uuid
+          contratoId:
+            type: string
+            format: uuid
+          propostaId:
+            type: string
+            format: uuid
+          status:
+            type: string
+          dataContrato:
+            type: string
+            format: date-time
+        additionalProperties: true
+      description: ce_type = contratacao.contrato.v1; ce_id = eventoId; Kafka key = solicitacaoId. Campos de payload
+        sujeitos à validação conjunta.
+    LiberacaoAtualizada:
+      name: LiberacaoAtualizada
+      title: contratacao.liberacao.v1
+      contentType: application/json
+      headers:
+        $ref: '#/components/schemas/CloudEventsHeaders'
+      payload:
+        type: object
+        required:
+        - eventoId
+        - solicitacaoId
+        - contratoId
+        - status
+        - valorLiberado
+        - dataLiberacao
+        properties:
+          eventoId:
+            type: string
+            format: uuid
+          solicitacaoId:
+            type: string
+            format: uuid
+          contratoId:
+            type: string
+            format: uuid
+          status:
+            type: string
+          valorLiberado:
+            type: number
+            multipleOf: 0.01
+            description: BRL; serializar como número decimal, sem arredondamento binário no domínio
+          dataLiberacao:
+            type: string
+            format: date-time
+        additionalProperties: true
+      description: ce_type = contratacao.liberacao.v1; ce_id = eventoId; Kafka key = solicitacaoId. Campos de payload
+        sujeitos à validação conjunta.
+  schemas:
+    CloudEventsHeaders:
+      type: object
+      required:
+      - ce_specversion
+      - ce_id
+      - ce_source
+      - ce_type
+      - ce_time
+      - ce_datacontenttype
+      properties:
+        ce_specversion:
+          type: string
+          description: Versão CloudEvents; deve ser 1.0
+          const: '1.0'
+        ce_id:
+          type: string
+          description: UUID único do evento; igual a payload.eventoId
+          format: uuid
+        ce_source:
+          type: string
+          description: URI de origem do serviço publicador
+        ce_type:
+          type: string
+          description: Nome exato do tópico de evento
+        ce_time:
+          type: string
+          description: Instante ISO-8601 com offset
+          format: date-time
+        ce_datacontenttype:
+          type: string
+          description: application/json
+          const: application/json
+        traceparent:
+          type: string
+          description: Contexto de rastreamento W3C, se houver
+      additionalProperties: true
