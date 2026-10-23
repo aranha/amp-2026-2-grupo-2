@@ -168,6 +168,27 @@ services:
   #   servico-contratacao  → Marcus   (Python)  porta 8085
   #   app-cliente          → Rafael   (SPA)     porta 5173
 
+  servico-antifraude:
+    build:
+      context: ./servico-antifraude
+    profiles: ["apps"]
+    container_name: amp-servico-antifraude
+    ports:
+      - "8084:8084"
+    environment:
+      BANCO_URL: postgresql://antifraude_user:antifraude@postgres:5432/amp
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9094
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8084/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
 volumes:
   postgres-data:
   grafana-data:
