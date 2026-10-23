@@ -46,7 +46,16 @@ jobs:
           python-version: '3.12'
           cache: pip
       - name: Instalar dependências
-        run: pip install -r ${{ matrix.servico }}/requirements.txt
+        shell: bash
+        run: |
+          if [[ -f "${{ matrix.servico }}/pyproject.toml" ]]; then
+            python -m pip install -e "${{ matrix.servico }}[test]"
+          elif [[ -f "${{ matrix.servico }}/requirements.txt" ]]; then
+            python -m pip install -r "${{ matrix.servico }}/requirements.txt"
+          else
+            echo "::error::Nenhum pyproject.toml ou requirements.txt encontrado em ${{ matrix.servico }}"
+            exit 1
+          fi
       - name: Testes de domínio — sem framework, sem banco
         run: pytest ${{ matrix.servico }}/tests -v
 

@@ -16,9 +16,16 @@ o exemplo de **fragmentação excessiva evitada** na apresentação.
 
 ## A fazer
 
-- [ ] Esqueleto com `/health` — **16/10**
-- [ ] Domínio + pytest sem framework
+- [x] Esqueleto com `/health` — **16/10**
+- [x] Domínio + pytest sem framework
 - [ ] Consumidor e produtores Kafka
 - [ ] Mock do core bancário + M2M
-- [ ] `Dockerfile` multi-stage · `docs/contratos/openapi-contratacao.yaml`
+- [x] `Dockerfile` multi-stage · `docs/contratos/openapi-contratacao.yaml` (contrato preliminar)
 - [ ] ADR-007 · `scripts/demo.sh`
+
+## Estado da primeira etapa
+
+O serviço já possui domínio isolado, testes unitários, portas para os adaptadores, migração
+inicial do schema próprio, endpoint `/health` e imagem multi-stage. A integração Kafka, o mock
+do core, Client Credentials e os payloads finais permanecem pendentes do aceite conjunto
+registrado no plano de trabalho.
