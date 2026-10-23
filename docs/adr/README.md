@@ -14,7 +14,7 @@ Template: [ADR-000-template.md](ADR-000-template.md)
 | 004 | Clean Architecture e Hexagonal: a mesma regra de dependência | Guilherme | ☐ |
 | 005 | CQRS *lite* em vez de CQRS completo | Vinicius | ☐ |
 | 006 | Kafka como barramento: Observer, partições e consumer groups | Hugo | ☐ |
-| 007 | CloudEvents e regra de compatibilidade de contrato | Marcus | ☐ |
+| [007](ADR-007-cloudevents-compatibilidade.md) | CloudEvents e regra de compatibilidade de contrato | Marcus | 🟡 proposta |
 | 008 | BFF: agregação, resiliência e versionamento de API | Paulo | ☐ |
 | [009](ADR-009-keycloak-oauth2-oidc-pkce.md) | Keycloak, OAuth2/OIDC e PKCE | Rafael | ✅ |
 | 010 | OpenTelemetry e Loki em vez de ELK | Sesaque | ☐ |
