@@ -189,6 +189,52 @@ services:
       timeout: 3s
       retries: 10
 
+  servico-contratacao:
+    build:
+      context: ./servico-contratacao
+    profiles: ["apps"]
+    container_name: amp-servico-contratacao
+    ports:
+      - "8085:8085"
+    environment:
+      CONTRACTING_DATABASE_URL: postgresql://contratacao_user:contratacao@postgres:5432/amp
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9094
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8085/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  bff:
+    build:
+      context: ./bff
+    profiles: ["apps"]
+    container_name: amp-bff
+    ports:
+      - "8080:8080"
+    environment:
+      OIDC_ISSUER: http://localhost:8180/realms/credito
+      OIDC_JWKS: http://keycloak:8080/realms/credito/protocol/openid-connect/certs
+      OIDC_AUDIENCE: bff-api
+      CORS_ORIGENS: http://localhost:5173
+      CREDITO_URL: http://servico-credito:8080
+      RISCO_URL: http://servico-risco:8080
+      ANTIFRAUDE_URL: http://servico-antifraude:8084
+    depends_on:
+      keycloak:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/actuator/health/readiness | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
 volumes:
   postgres-data:
   grafana-data:
