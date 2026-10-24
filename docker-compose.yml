@@ -168,6 +168,24 @@ services:
   #   servico-contratacao  → Marcus   (Python)  porta 8085
   #   app-cliente          → Rafael   (SPA)     porta 5173
 
+  servico-contratacao:
+    build:
+      context: ./servico-contratacao
+    profiles: ["apps"]
+    container_name: amp-servico-contratacao
+    ports:
+      - "8085:8085"
+    environment:
+      CONTRACTING_DATABASE_URL: postgresql://contratacao_user:contratacao@postgres:5432/amp
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9094
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8085/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
   bff:
     build:
       context: ./bff
