@@ -1,6 +1,6 @@
 # ADR-007 — CloudEvents e compatibilidade de contratos
 
-- **Status:** proposta da trilha de Contratação
+- **Status:** aceita para a implementação da trilha de Contratação
 - **Dono:** Marcus Santos
 - **Data:** 2026-10-22
 
@@ -28,8 +28,7 @@ solicitação.
    identificador de idempotência.
 6. A liberação do crédito tenta o core no máximo três vezes. As duas falhas
    iniciais deixam o estado em `RETRYING`; a terceira move a mensagem para a
-   DLQ e interrompe a retentativa automática. O limite é uma proposta até o
-   aceite do grupo e do contrato do core.
+   DLQ e interrompe a retentativa automática.
 
 ## Consequências
 
@@ -40,8 +39,8 @@ solicitação.
   mensagem.
 - O limite de três tentativas evita retry infinito, mas pode enviar falhas
   transitórias para a DLQ; o reprocessamento será manual e observável.
-- A decisão de payload ainda depende do aceite do `asyncapi.yaml` pelos donos
-  de Crédito, Antifraude e Risco.
+- O payload segue o `asyncapi.yaml` compartilhado; campos desconhecidos são
+  ignorados para permitir evolução aditiva.
 
 ## Quando não vale a pena
 

@@ -2,7 +2,7 @@ openapi: 3.0.3
 info:
   title: Serviço de Contratação e Liberação
   version: 0.1.0
-  description: Contrato preliminar; o fluxo de eventos ainda depende do aceite do AsyncAPI.
+  description: Endpoint operacional; o fluxo de negócio é orientado pelos eventos do AsyncAPI.
 servers:
   - url: http://localhost:8085
 paths:
