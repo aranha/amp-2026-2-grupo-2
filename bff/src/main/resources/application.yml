@@ -1,0 +1,100 @@
+spring:
+  application:
+    name: bff
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER:http://localhost:8180/realms/credito}
+          jwk-set-uri: ${OIDC_JWKS:http://localhost:8180/realms/credito/protocol/openid-connect/certs}
+
+bff:
+  seguranca:
+    audience: ${OIDC_AUDIENCE:bff-api}
+  cors:
+    origens: ${CORS_ORIGENS:http://localhost:5173}
+  downstreams:
+    credito: ${CREDITO_URL:http://localhost:8082}
+    risco: ${RISCO_URL:http://localhost:8083}
+    antifraude: ${ANTIFRAUDE_URL:http://localhost:8084}
+    conexao: 2s
+    leitura: 3s
+  canal-origem: ${CANAL_ORIGEM:app-cliente}
+  versionamento:
+    deprecation: "Wed, 22 Oct 2026 00:00:00 GMT"
+    sunset: "Wed, 31 Dec 2026 00:00:00 GMT"
+
+resilience4j:
+  circuitbreaker:
+    configs:
+      padrao:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 10
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        registerHealthIndicator: true
+        ignoreExceptions:
+          - br.pucminas.aed.bff.proposta.PropostaNaoEncontradaException
+          - br.pucminas.aed.bff.solicitacao.SolicitacaoInvalidaException
+    instances:
+      credito:
+        baseConfig: padrao
+      risco:
+        baseConfig: padrao
+      antifraude:
+        baseConfig: padrao
+  retry:
+    configs:
+      padrao:
+        maxAttempts: 3
+        waitDuration: 200ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+        ignoreExceptions:
+          - br.pucminas.aed.bff.proposta.PropostaNaoEncontradaException
+          - br.pucminas.aed.bff.solicitacao.SolicitacaoInvalidaException
+    instances:
+      credito:
+        baseConfig: padrao
+      risco:
+        baseConfig: padrao
+      antifraude:
+        baseConfig: padrao
+  bulkhead:
+    configs:
+      padrao:
+        maxConcurrentCalls: 10
+        maxWaitDuration: 0
+    instances:
+      credito:
+        baseConfig: padrao
+      risco:
+        baseConfig: padrao
+      antifraude:
+        baseConfig: padrao
+
+server:
+  port: ${SERVER_PORT:8080}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,circuitbreakers
+  health:
+    circuitbreakers:
+      enabled: true
+  endpoint:
+    health:
+      show-details: always
+      probes:
+        enabled: true
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
