@@ -10,12 +10,26 @@ O arquivo `realm-credito.json` desta pasta é importado no boot (`--import-realm
 
 ## Endpoints
 
-| Para quê | URL |
-|---|---|
-| Issuer (`iss`) | `http://localhost:8180/realms/credito` |
-| Discovery (OIDC) | `http://localhost:8180/realms/credito/.well-known/openid-configuration` |
-| JWKS (chaves públicas) | `http://localhost:8180/realms/credito/protocol/openid-connect/certs` |
-| Token | `http://localhost:8180/realms/credito/protocol/openid-connect/token` |
+O navegador enxerga o Keycloak em `localhost:8180`; um container, em `keycloak:8080`. Com
+`KC_HOSTNAME` + `KC_HOSTNAME_BACKCHANNEL_DYNAMIC` no compose, **o `iss` é sempre o mesmo**, venha o
+pedido de onde vier, e cada um chama token e JWKS pelo endereço que alcança.
+
+| Para quê | Do navegador / host | De dentro do Docker |
+|---|---|---|
+| Issuer (`iss`) — valor a conferir | `http://localhost:8180/realms/credito` | **o mesmo** `http://localhost:8180/realms/credito` |
+| Token | `http://localhost:8180/realms/credito/protocol/openid-connect/token` | `http://keycloak:8080/realms/credito/protocol/openid-connect/token` |
+| JWKS (chaves públicas) | `http://localhost:8180/realms/credito/protocol/openid-connect/certs` | `http://keycloak:8080/realms/credito/protocol/openid-connect/certs` |
+| Discovery (OIDC) | `http://localhost:8180/realms/credito/.well-known/openid-configuration` | `http://keycloak:8080/realms/credito/.well-known/openid-configuration` |
+
+**Spring Boot (BFF), rodando no compose:** configure as duas propriedades. Com `jwk-set-uri`
+presente, o Spring busca as chaves pela rede interna e usa `issuer-uri` só para conferir o `iss`,
+sem tentar acessar `localhost:8180` de dentro do container.
+
+```yaml
+spring.security.oauth2.resourceserver.jwt:
+  jwk-set-uri: http://keycloak:8080/realms/credito/protocol/openid-connect/certs
+  issuer-uri: http://localhost:8180/realms/credito
+```
 
 ## Clients
 
@@ -78,9 +92,3 @@ docker compose start keycloak
 
 > ⚠️ O Keycloak **não tem volume**: o que foi feito no painel existe só dentro do container.
 > `stop`/`start` são seguros; `down` ou `rm` **apagam** tudo o que não foi exportado.
-
-## Pendente
-
-- **Issuer dentro do Docker.** O token sai com `iss = http://localhost:8180/...`, mas um serviço
-  em container enxerga o Keycloak como `keycloak:8080`. Antes de o BFF validar token rodando no
-  compose, fixar o hostname público (`KC_HOSTNAME`) e buscar o JWKS pela rede interna.

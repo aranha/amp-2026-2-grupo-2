@@ -20,6 +20,13 @@ npm install
 npm run dev                     # http://localhost:5173
 ```
 
+Ou pelo Docker (nginx servindo o build), sem Node instalado — não rode junto com `npm run dev`,
+os dois usam a porta 5173:
+
+```powershell
+docker compose up -d --build app-cliente
+```
+
 Usuários: `maria.cliente` / `123` (role `cliente`) · `ana.analista` / `123` (role `analista`).
 URLs sobrescrevíveis por `.env`: `VITE_OIDC_AUTHORITY` (padrão `http://localhost:8180/realms/credito`)
 e `VITE_BFF_URL` (padrão `http://localhost:8080`).
@@ -40,4 +47,4 @@ Para ver o PKCE: DevTools → Network → *Preserve log* → Entrar. Em `auth?` 
 - [x] Fluxo PKCE funcionando — **22/10**
 - [ ] Telas de solicitação e consulta de proposta
 - [ ] Script `curl` equivalente, como plano B da demo
-- [ ] `Dockerfile` multi-stage (build Vite → nginx)
+- [x] `Dockerfile` multi-stage (build Vite → nginx), com CSP e `Referrer-Policy: no-referrer`
