@@ -24,6 +24,8 @@ servers:
 tags:
   - name: Propostas
     description: Consulta agregada de proposta de crédito
+  - name: Solicitações
+    description: Abertura de solicitação de crédito
   - name: Análises
     description: Pareceres de risco, restritos a analista
 
@@ -147,6 +149,65 @@ paths:
           $ref: '#/components/responses/SemToken'
         '404':
           $ref: '#/components/responses/PropostaNaoEncontrada'
+        '503':
+          $ref: '#/components/responses/FonteIndisponivel'
+
+  /v1/solicitacoes:
+    post:
+      tags: [Solicitações]
+      summary: Abre uma solicitação de crédito
+      description: |
+        Encaminha a solicitação ao Crédito, que responde 202 e publica
+        `credito.solicitacao.v1`. O acompanhamento é por `GET /v2/propostas/{solicitacaoId}`,
+        cujo endereço vem no header `Location`.
+
+        O corpo carrega apenas o valor. `clienteId` vem do `sub` do token validado — não do
+        que o cliente enviou, para que ninguém solicite crédito em nome de outra pessoa —,
+        e `canalOrigem` e `dataSolicitacao` são definidos pelo BFF.
+
+        **Esta rota não tem retry.** Criar solicitação não é idempotente: repetir
+        automaticamente geraria solicitações duplicadas. Continua protegida por circuit
+        breaker e bulkhead, que não repetem nada.
+      operationId: abrirSolicitacao
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NovaSolicitacao'
+            example:
+              valorSolicitado: 18500.00
+      responses:
+        '202':
+          description: Solicitação aceita e encaminhada
+          headers:
+            Location:
+              description: Onde acompanhar a proposta
+              schema:
+                type: string
+              example: /v2/propostas/3f1c9a60-7b4e-4a21-9c0d-5e2a1b8f4d33
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SolicitacaoAceita'
+              example:
+                solicitacaoId: 3f1c9a60-7b4e-4a21-9c0d-5e2a1b8f4d33
+                eventoId: 8b2d4e17-0a95-4c73-b6f1-2d9c7e5a1044
+                valorSolicitado: 18500.00
+                dataSolicitacao: '2026-10-24T13:00:00Z'
+        '400':
+          description: Valor ausente ou não positivo, ou recusa de validação do Crédito
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Bad Request
+                status: 400
+                detail: valorSolicitado deve ser maior que zero
+        '401':
+          $ref: '#/components/responses/SemToken'
         '503':
           $ref: '#/components/responses/FonteIndisponivel'
 
@@ -356,6 +417,31 @@ components:
         motivo:
           type: string
         dataAnalise:
+          type: string
+          format: date-time
+
+    NovaSolicitacao:
+      type: object
+      description: O resto da solicitação o BFF deriva do token e do próprio contexto.
+      required: [valorSolicitado]
+      properties:
+        valorSolicitado:
+          type: number
+          description: BRL, maior que zero
+          example: 18500.00
+
+    SolicitacaoAceita:
+      type: object
+      properties:
+        solicitacaoId:
+          type: string
+          format: uuid
+        eventoId:
+          type: string
+          format: uuid
+        valorSolicitado:
+          type: number
+        dataSolicitacao:
           type: string
           format: date-time
 
