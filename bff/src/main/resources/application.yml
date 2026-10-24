@@ -19,6 +19,7 @@ bff:
     antifraude: ${ANTIFRAUDE_URL:http://localhost:8084}
     conexao: 2s
     leitura: 3s
+  canal-origem: ${CANAL_ORIGEM:app-cliente}
   versionamento:
     deprecation: "Wed, 22 Oct 2026 00:00:00 GMT"
     sunset: "Wed, 31 Dec 2026 00:00:00 GMT"
@@ -37,6 +38,7 @@ resilience4j:
         registerHealthIndicator: true
         ignoreExceptions:
           - br.pucminas.aed.bff.proposta.PropostaNaoEncontradaException
+          - br.pucminas.aed.bff.solicitacao.SolicitacaoInvalidaException
     instances:
       credito:
         baseConfig: padrao
@@ -53,6 +55,7 @@ resilience4j:
         exponentialBackoffMultiplier: 2
         ignoreExceptions:
           - br.pucminas.aed.bff.proposta.PropostaNaoEncontradaException
+          - br.pucminas.aed.bff.solicitacao.SolicitacaoInvalidaException
     instances:
       credito:
         baseConfig: padrao
@@ -80,7 +83,7 @@ management:
   endpoints:
     web:
       exposure:
-        include: health,info,metrics,circuitbreakers
+        include: health,info,metrics,prometheus,circuitbreakers
   health:
     circuitbreakers:
       enabled: true

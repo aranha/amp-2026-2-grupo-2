@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.http.client.ClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 
+import java.time.Clock;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
@@ -32,6 +33,11 @@ public class ClientesHttpConfig {
     @Bean
     RestClient antifraudeRestClient(RestClient.Builder builder) {
         return cliente(builder, propriedades.antifraude());
+    }
+
+    @Bean
+    Clock relogio() {
+        return Clock.systemUTC();
     }
 
     @Bean

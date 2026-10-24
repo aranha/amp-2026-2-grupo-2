@@ -9,6 +9,7 @@ Camada de borda. Única porta de entrada do `app-cliente`.
 - `GET /v2/propostas/{id}` agregando **três** fontes: proposta (crédito), parecer (risco),
   status (antifraude). Não é proxy — se fosse repasse 1:1, seria camada decorativa
 - `GET /v1/propostas/{id}` com os campos planos, header `Deprecation` + `Sunset`
+- `POST /v1/solicitacoes` abrindo a solicitação, **sem retry** — criar não é idempotente
 - Resilience4j por downstream: circuit breaker, **retry só em GET**, timeout, bulkhead, fallback
 - Spring Security Resource Server validando o JWT *(config com Rafael)*
 
@@ -62,7 +63,16 @@ sem ele a resposta é **503** com a fonte no corpo, porque devolver proposta sem
 
 404 do downstream não conta como falha para o circuit breaker: é resposta, não indisponibilidade.
 
-Estado dos breakers em `GET /actuator/circuitbreakers`.
+O `POST /v1/solicitacoes` fica de fora do retry por ser a única rota que cria estado: repetir
+geraria solicitação duplicada. Continua com circuit breaker e bulkhead, que não repetem nada.
+Há teste que falha se alguém acrescentar `@Retry` nele.
+
+Ele também não é repasse: `clienteId` vem do `sub` do token, não do corpo, e `canalOrigem` e
+`dataSolicitacao` são do BFF. O `Location` da resposta aponta para a consulta da proposta.
+
+Estado dos breakers em `GET /actuator/circuitbreakers`; métricas em `GET /actuator/prometheus`,
+incluindo `resilience4j_circuitbreaker_state` e `http_server_requests_seconds` — é de onde saem
+os dashboards de latência e de disponibilidade.
 
 ## Versionamento
 
@@ -94,3 +104,5 @@ Micrometer + OTel *(OTel entra com a trilha de observabilidade)*
 - [x] `Dockerfile` multi-stage
 - [x] `docs/contratos/openapi-bff.yaml`
 - [x] ADR-001, ADR-003, ADR-008
+- [x] `POST /v1/solicitacoes` sem retry
+- [x] `/actuator/prometheus` para os dashboards
