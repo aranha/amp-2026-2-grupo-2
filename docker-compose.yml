@@ -80,6 +80,11 @@ services:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
       KC_HEALTH_ENABLED: "true"
+      # Emissor único: todo token sai com iss = http://localhost:8180/realms/credito, seja pedido
+      # pelo navegador (localhost:8180) ou por um container (keycloak:8080). Com o backchannel
+      # dinâmico, quem chama por keycloak:8080 recebe token/JWKS nesse mesmo endereço interno.
+      KC_HOSTNAME: http://localhost:8180
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
     volumes:
       # Realm exportado pelo Rafael. Enquanto não existir, o import é no-op.
       - ./infra/keycloak:/opt/keycloak/data/import:ro
@@ -89,6 +94,19 @@ services:
       timeout: 5s
       retries: 30
       start_period: 30s
+
+  # SPA do Rafael. Fica junto do Keycloak porque é o client público dele (PKCE).
+  # Porta 5173 no host: é o redirect URI cadastrado no realm. Não rode junto com `npm run dev`.
+  app-cliente:
+    build:
+      context: ./app-cliente
+    profiles: ["apps"]
+    container_name: amp-app-cliente
+    ports:
+      - "5173:80"
+    depends_on:
+      keycloak:
+        condition: service_healthy
 
   # ---------------------------------------------------------- observabilidade
   otel-collector:
