@@ -1,0 +1,378 @@
+openapi: 3.0.3
+info:
+  title: BFF — Plataforma de Crédito
+  version: 2.0.0
+  description: |
+    Única porta de entrada do `app-cliente`. Não é proxy: agrega três fontes — proposta
+    (Crédito), parecer (Risco) e status (Antifraude) —, resguarda com Resilience4j e mantém
+    duas versões vivas.
+
+    Decisões e trade-offs em ADR-008. Contrato de eventos em `asyncapi.yaml`.
+
+    **Autenticação.** Todas as rotas de negócio exigem um JWT emitido pelo realm `credito`
+    do Keycloak, com `aud = bff-api`. O BFF valida assinatura RS256 contra o JWKS, `iss`,
+    `exp` e a audience. Sem token ou com token inválido: **401**. Token válido sem a role
+    exigida: **403**.
+
+    **Degradação.** Risco ou Antifraude fora do ar não derrubam a resposta: o bloco
+    correspondente é omitido e o sinalizador `parecerIndisponivel` ou `antifraudeIndisponivel`
+    vem `true`. O Crédito não degrada — sem ele a resposta é **503**.
+servers:
+  - url: http://localhost:8080
+    description: Local, via `mvn spring-boot:run` ou `docker compose --profile apps up -d bff`
+
+tags:
+  - name: Propostas
+    description: Consulta agregada de proposta de crédito
+  - name: Análises
+    description: Pareceres de risco, restritos a analista
+
+security:
+  - bearerAuth: []
+
+paths:
+
+  /v2/propostas/{solicitacaoId}:
+    get:
+      tags: [Propostas]
+      summary: Consulta uma proposta agregada
+      description: |
+        Agrega Crédito, Risco e Antifraude. O Crédito é consultado primeiro: sem proposta,
+        responde 404 sem gastar as outras duas chamadas. Risco e Antifraude saem em paralelo.
+      operationId: consultarPropostaV2
+      parameters:
+        - $ref: '#/components/parameters/SolicitacaoId'
+      responses:
+        '200':
+          description: Proposta agregada, possivelmente degradada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PropostaV2'
+              examples:
+                completa:
+                  summary: As três fontes responderam
+                  value:
+                    solicitacaoId: 3f1c9a60-7b4e-4a21-9c0d-5e2a1b8f4d33
+                    propostaId: p-1
+                    elegivel: true
+                    statusContrato: ATIVO
+                    condicoes:
+                      valorAprovado: 18500.00
+                      taxa: 0.019
+                      parcelas: 24
+                      cet: 0.0241
+                    parecer:
+                      elegivel: true
+                      motivo: Renda compatível
+                      dataAnalise: '2026-10-24T13:01:00Z'
+                    antifraude:
+                      aprovada: true
+                      score: 870
+                      motivo: Sem indício
+                      dataAnalise: '2026-10-24T13:02:00Z'
+                    parecerIndisponivel: false
+                    antifraudeIndisponivel: false
+                    atualizadaEm: '2026-10-24T13:02:11Z'
+                degradada:
+                  summary: Antifraude fora do ar — o bloco some e o sinalizador acusa
+                  value:
+                    solicitacaoId: 3f1c9a60-7b4e-4a21-9c0d-5e2a1b8f4d33
+                    propostaId: p-1
+                    elegivel: true
+                    statusContrato: ATIVO
+                    condicoes:
+                      valorAprovado: 18500.00
+                      taxa: 0.019
+                      parcelas: 24
+                      cet: 0.0241
+                    parecer:
+                      elegivel: true
+                      motivo: Renda compatível
+                      dataAnalise: '2026-10-24T13:01:00Z'
+                    parecerIndisponivel: false
+                    antifraudeIndisponivel: true
+                    atualizadaEm: '2026-10-24T13:02:11Z'
+        '401':
+          $ref: '#/components/responses/SemToken'
+        '404':
+          $ref: '#/components/responses/PropostaNaoEncontrada'
+        '503':
+          $ref: '#/components/responses/FonteIndisponivel'
+
+  /v1/propostas/{solicitacaoId}:
+    get:
+      tags: [Propostas]
+      summary: Consulta uma proposta — forma plana, depreciada
+      deprecated: true
+      description: |
+        Mesma agregação da v2, projetada na forma plana. Mantida para quem já consome.
+
+        A v2 agrupou as condições em `condicoes` e acrescentou `cet`; tirar `taxa` do topo é
+        breaking change, por isso as duas convivem. Esta rota responde com `Deprecation`,
+        `Sunset` e um `Link` para a sucessora.
+      operationId: consultarPropostaV1
+      parameters:
+        - $ref: '#/components/parameters/SolicitacaoId'
+      responses:
+        '200':
+          description: Proposta na forma plana
+          headers:
+            Deprecation:
+              description: Data em que a rota passou a ser depreciada (RFC 8594)
+              schema:
+                type: string
+              example: Wed, 22 Oct 2026 00:00:00 GMT
+            Sunset:
+              description: Data a partir da qual a rota deixa de responder (RFC 8594)
+              schema:
+                type: string
+              example: Wed, 31 Dec 2026 00:00:00 GMT
+            Link:
+              description: Aponta a versão sucessora
+              schema:
+                type: string
+              example: </v2/propostas/3f1c9a60-7b4e-4a21-9c0d-5e2a1b8f4d33>; rel="successor-version"
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PropostaV1'
+              example:
+                solicitacaoId: 3f1c9a60-7b4e-4a21-9c0d-5e2a1b8f4d33
+                valorAprovado: 18500.00
+                taxa: 0.019
+                parcelas: 24
+                status: ATIVO
+        '401':
+          $ref: '#/components/responses/SemToken'
+        '404':
+          $ref: '#/components/responses/PropostaNaoEncontrada'
+        '503':
+          $ref: '#/components/responses/FonteIndisponivel'
+
+  /v1/analises:
+    get:
+      tags: [Análises]
+      summary: Lista os pareceres de risco
+      description: |
+        Exige a role `analista`. É a rota que demonstra a diferença entre 401 e 403:
+        `maria.cliente` tem token válido e recebe 403; `ana.analista` recebe 200.
+
+        O dono desta leitura é o `servico-risco`. Enquanto ele não expuser REST, o BFF
+        responde de uma lista provisória.
+      operationId: listarAnalises
+      responses:
+        '200':
+          description: Pareceres visíveis ao analista autenticado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RespostaDeAnalises'
+              example:
+                consultadoPor: ana.analista
+                analises:
+                  - solicitacaoId: 3f1c9a60-7b4e-4a21-9c0d-5e2a1b8f4d33
+                    elegivel: true
+                    valorAprovado: 18500.00
+                    motivo: Renda compatível e sem restrição
+                    dataAnalise: '2026-10-24T13:02:11Z'
+        '401':
+          $ref: '#/components/responses/SemToken'
+        '403':
+          $ref: '#/components/responses/SemRole'
+
+components:
+
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: |
+        Access token do realm `credito`, obtido por Authorization Code + PKCE (S256) pelo
+        client público `app-cliente`. Emissor `http://localhost:8180/realms/credito`,
+        audience `bff-api`, validade de 5 minutos. Roles em `realm_access.roles`.
+
+  parameters:
+    SolicitacaoId:
+      name: solicitacaoId
+      in: path
+      required: true
+      description: Identificador da solicitação de crédito
+      schema:
+        type: string
+        format: uuid
+      example: 3f1c9a60-7b4e-4a21-9c0d-5e2a1b8f4d33
+
+  responses:
+    SemToken:
+      description: Token ausente, expirado, com assinatura inválida ou sem a audience `bff-api`
+      headers:
+        WWW-Authenticate:
+          description: Motivo da recusa, conforme RFC 6750
+          schema:
+            type: string
+          example: 'Bearer error="invalid_token", error_description="Token sem a audience esperada: bff-api"'
+    SemRole:
+      description: Token válido, mas sem a role exigida pela rota
+    PropostaNaoEncontrada:
+      description: Não existe proposta para esta solicitação
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+          example:
+            type: about:blank
+            title: Not Found
+            status: 404
+            detail: 'Proposta nao encontrada: 3f1c9a60-7b4e-4a21-9c0d-5e2a1b8f4d33'
+    FonteIndisponivel:
+      description: |
+        O Crédito não respondeu — por timeout, erro ou circuito aberto. Ao contrário de Risco
+        e Antifraude, ele não degrada: sem proposta não há resposta parcial possível.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/ProblemDetail'
+          example:
+            type: about:blank
+            title: Service Unavailable
+            status: 503
+            detail: 'Fonte indisponivel: credito'
+            fonte: credito
+
+  schemas:
+
+    PropostaV2:
+      type: object
+      description: Proposta agregada. Os blocos `parecer` e `antifraude` são omitidos quando a fonte não responde.
+      required: [solicitacaoId, parecerIndisponivel, antifraudeIndisponivel]
+      properties:
+        solicitacaoId:
+          type: string
+          format: uuid
+        propostaId:
+          type: string
+        elegivel:
+          type: boolean
+        statusContrato:
+          type: string
+        condicoes:
+          $ref: '#/components/schemas/CondicoesV2'
+        parecer:
+          $ref: '#/components/schemas/ParecerV2'
+        antifraude:
+          $ref: '#/components/schemas/AntifraudeV2'
+        parecerIndisponivel:
+          type: boolean
+          description: '`true` quando o Risco não respondeu; o bloco `parecer` vem ausente'
+        antifraudeIndisponivel:
+          type: boolean
+          description: '`true` quando o Antifraude não respondeu; o bloco `antifraude` vem ausente'
+        atualizadaEm:
+          type: string
+          format: date-time
+
+    CondicoesV2:
+      type: object
+      description: |
+        Condições do crédito. `taxa`, `parcelas` e `cet` dependem de o `servico-credito`
+        expor as condições na consulta; enquanto não expuser, vêm nulos.
+      properties:
+        valorAprovado:
+          type: number
+          description: BRL
+        taxa:
+          type: number
+          description: Fração ao mês — 0.019 é 1,9% a.m.
+        parcelas:
+          type: integer
+        cet:
+          type: number
+          description: Custo efetivo total, fração ao mês. Acrescentado na v2
+
+    ParecerV2:
+      type: object
+      properties:
+        elegivel:
+          type: boolean
+        motivo:
+          type: string
+        dataAnalise:
+          type: string
+          format: date-time
+
+    AntifraudeV2:
+      type: object
+      properties:
+        aprovada:
+          type: boolean
+        score:
+          type: integer
+        motivo:
+          type: string
+        dataAnalise:
+          type: string
+          format: date-time
+
+    PropostaV1:
+      type: object
+      description: Forma plana, depreciada. `taxa` e `parcelas` no topo, sem `cet`.
+      properties:
+        solicitacaoId:
+          type: string
+          format: uuid
+        valorAprovado:
+          type: number
+        taxa:
+          type: number
+        parcelas:
+          type: integer
+        status:
+          type: string
+
+    RespostaDeAnalises:
+      type: object
+      properties:
+        consultadoPor:
+          type: string
+          description: Vem do `preferred_username` do token validado, não do que o cliente enviou
+        analises:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnaliseResumo'
+
+    AnaliseResumo:
+      type: object
+      description: Espelha o payload de `risco.elegibilidade.v1` no `asyncapi.yaml`
+      properties:
+        solicitacaoId:
+          type: string
+          format: uuid
+        elegivel:
+          type: boolean
+        valorAprovado:
+          type: number
+        motivo:
+          type: string
+        dataAnalise:
+          type: string
+          format: date-time
+
+    ProblemDetail:
+      type: object
+      description: RFC 7807
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+        fonte:
+          type: string
+          description: Extensão própria, presente no 503 — qual downstream falhou

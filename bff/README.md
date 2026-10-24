@@ -86,11 +86,11 @@ Micrometer + OTel *(OTel entra com a trilha de observabilidade)*
 ## A fazer
 
 - [x] Esqueleto respondendo `/actuator/health` — **16/10**
-- [ ] Contrato REST `/v1` e `/v2` publicado para o Rafael — **20/10**
+- [x] Contrato REST `/v1` e `/v2` publicado para o Rafael — **20/10**
 - [x] Resource Server, CORS e `GET /v1/analises` com role `analista`
 - [x] Agregação das 3 fontes
 - [x] Resilience4j completo, com fallback degradado
 - [x] `/v1` e `/v2` convivendo, com `Deprecation` e `Sunset`
-- [x] `Dockerfile` multi-stage *(escrito; build ainda não validado — Docker parado)*
-- [ ] `docs/contratos/openapi-bff.yaml`
+- [x] `Dockerfile` multi-stage
+- [x] `docs/contratos/openapi-bff.yaml`
 - [x] ADR-001, ADR-003, ADR-008
