@@ -37,7 +37,7 @@ function telaLogado(user) {
       solicitar: () => telaSolicitar({ sub: payload.sub, acompanhar: (id) => abrir('consultar', { solicitacaoId: id }) }),
       consultar: () => telaConsultar(opcoes),
       analises: () => telaAnalises(),
-      token: () => telaToken(payload),
+      token: () => telaToken(payload, user.access_token),
     };
     conteudo.replaceChildren(telas[aba]());
   }
