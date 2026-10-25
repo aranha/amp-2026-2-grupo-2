@@ -48,8 +48,10 @@ e confere o `state` na volta. Token em `sessionStorage` (morre com a aba), tela 
 `textContent` e nunca `innerHTML` (XSS é o que roubaria o token), e logout que encerra a sessão
 no Keycloak, não só no navegador.
 
-**Dados pessoais.** O token carrega o mínimo para a tela: `sub` é um UUID, não o CPF, e o CPF
-**nunca** vai no token nem nos eventos.
+**Dados pessoais (LGPD, princípio da necessidade).** O access token, que viaja para a API a cada
+requisição, leva só o que a API usa: `sub` (um UUID, não o CPF), roles, `aud` e o nome para
+exibição. O **email ficou fora do access token** — continua apenas no ID token e no userinfo,
+que são para a SPA. O CPF **nunca** vai em token nem em evento.
 
 ### Antipadrões evitados
 

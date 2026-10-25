@@ -45,6 +45,7 @@ Para ver o PKCE: DevTools → Network → *Preserve log* → Entrar. Em `auth?` 
 ## A fazer
 
 - [x] Fluxo PKCE funcionando — **22/10**
-- [ ] Telas de solicitação e consulta de proposta
+- [x] Telas de solicitação e consulta de proposta (`src/telas/`), seguindo `docs/contratos/openapi-bff.yaml`
+  — abas Solicitar, Consultar (com comparação v1 × v2), Análises (demo 200/401/403) e Meu token
 - [ ] Script `curl` equivalente, como plano B da demo
 - [x] `Dockerfile` multi-stage (build Vite → nginx), com CSP e `Referrer-Policy: no-referrer`
