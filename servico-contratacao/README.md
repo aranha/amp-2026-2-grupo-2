@@ -9,23 +9,27 @@ o exemplo de **fragmentação excessiva evitada** na apresentação.
 
 - Agregados `Contrato` e `LiberacaoDeCredito`
 - Consome `credito.proposta.v1` · produz `contratacao.contrato.v1` e `contratacao.liberacao.v1`
-- **Mock do core bancário** + chamada autenticada por **client credentials (M2M)** *(com Rafael)*
-- Retentativa de liberação: o hotspot do EventStorming. Escolher o limite, justificar na ADR-007
-  e parar na DLQ depois dele
+- Mock local determinístico do core bancário, com cliente HTTP opcional autenticado por
+  **client credentials (M2M)** *(com Rafael)*
+- Retentativa de liberação limitada a três tentativas, com estado `RETRYING` e `DLQ`
 - `scripts/demo.sh` — a sequência de `curl` que a gravação segue
 
 ## A fazer
 
 - [x] Esqueleto com `/health` — **16/10**
 - [x] Domínio + pytest sem framework
-- [ ] Consumidor e produtores Kafka
-- [ ] Mock do core bancário + M2M
+- [x] Consumidor e produtores Kafka com CloudEvents binary mode
+- [x] Mock local do core bancário + cliente HTTP com M2M opcional
+- [x] Retentativa de liberação limitada e publicação do estado na DLQ
 - [x] `Dockerfile` multi-stage · `docs/contratos/openapi-contratacao.yaml` (contrato preliminar)
-- [ ] ADR-007 · `scripts/demo.sh`
+- [x] ADR-007 · script de demo compartilhado
 
 ## Estado da primeira etapa
 
-O serviço já possui domínio isolado, testes unitários, portas para os adaptadores, migração
-inicial do schema próprio, endpoint `/health` e imagem multi-stage. A integração Kafka, o mock
-do core, Client Credentials e os payloads finais permanecem pendentes do aceite conjunto
-registrado no plano de trabalho.
+O serviço possui domínio isolado, consumidor e produtores Kafka, persistência no schema próprio,
+idempotência por `ce_id`, endpoint `/health`, imagem multi-stage e testes dos fluxos de sucesso,
+retry e DLQ. O modo local usa um mock determinístico; o modo HTTP usa Client Credentials e exige
+as variáveis `CONTRACTING_CORE_BANK_URL`, `CONTRACTING_OIDC_ISSUER`,
+`CONTRACTING_OIDC_CLIENT_ID` e `CONTRACTING_OIDC_CLIENT_SECRET`.
+Em execução local sem Kafka, `CONTRACTING_ENABLE_KAFKA=false` mantém apenas o endpoint operacional;
+o Compose habilita o consumidor explicitamente.

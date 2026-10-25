@@ -27,6 +27,8 @@ class ReleaseStatus(StrEnum):
 class Contract:
     solicitation_id: UUID
     approved_amount: Decimal
+    proposal_id: UUID | None = None
+    contract_id: UUID | None = None
     status: ContractStatus = ContractStatus.RECEIVED
 
     def __post_init__(self) -> None:
@@ -49,6 +51,8 @@ class Contract:
 @dataclass
 class CreditRelease:
     solicitation_id: UUID
+    contract_id: UUID | None = None
+    approved_amount: Decimal | None = None
     max_attempts: int = 3
     attempts: int = 0
     status: ReleaseStatus = ReleaseStatus.PENDING

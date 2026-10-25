@@ -6,6 +6,10 @@ from typing import Protocol
 from uuid import UUID
 
 
+class CoreBankUnavailable(ConnectionError):
+    pass
+
+
 @dataclass(frozen=True)
 class Event:
     topic: str
@@ -19,14 +23,30 @@ class EventPublisher(Protocol):
 
 
 class ContractRepository(Protocol):
+    def has_processed_event(self, event_id: UUID) -> bool: ...
+
+    def mark_event_processed(self, event_id: UUID) -> None: ...
+
     def save_contract(
-        self, solicitation_id: UUID, approved_amount: Decimal, status: str
+        self,
+        solicitation_id: UUID,
+        proposal_id: UUID,
+        contract_id: UUID,
+        approved_amount: Decimal,
+        status: str,
     ) -> None: ...
 
     def save_release(
-        self, solicitation_id: UUID, attempts: int, status: str
+        self,
+        solicitation_id: UUID,
+        contract_id: UUID,
+        approved_amount: Decimal,
+        attempts: int,
+        status: str,
     ) -> None: ...
 
 
 class CoreBankClient(Protocol):
-    def release_credit(self, solicitation_id: UUID) -> None: ...
+    def release_credit(
+        self, solicitation_id: UUID, amount: Decimal, access_token: str | None = None
+    ) -> None: ...
