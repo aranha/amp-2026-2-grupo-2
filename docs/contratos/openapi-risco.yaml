@@ -1,0 +1,185 @@
+openapi: 3.0.3
+info:
+  title: Serviço de Risco — Plataforma de Crédito
+  version: 1.0.0
+  description: |
+    Pareceres de elegibilidade do contexto de Risco. **Interno à rede dos serviços:** quem fala
+    com o mundo é o BFF, que valida o JWT e exige a role `analista` em `GET /v1/analises`. Por isso
+    esta API não tem autenticação própria; em Kubernetes ela é só um Service `ClusterIP`.
+
+    O parecer nasce de evento, não de HTTP: o serviço consome `credito.solicitacao.v1`, aplica a
+    regra de elegibilidade no agregado `AnaliseDeCredito` e publica `risco.elegibilidade.v1`
+    (ver `asyncapi.yaml`). Esta API só lê. Consistência eventual: logo depois da solicitação, o
+    parecer pode ainda não existir, e a resposta é 404.
+
+    Gerado em runtime pelo springdoc em `/v3/api-docs`; este arquivo é a versão revisada.
+servers:
+  - url: http://localhost:8083
+    description: Local, via `mvn spring-boot:run` ou o host do `docker compose --profile apps`
+  - url: http://servico-risco:8080
+    description: Dentro da rede do compose — é o `RISCO_URL` do BFF
+
+tags:
+  - name: Análises
+    description: Pareceres de elegibilidade
+
+paths:
+
+  /v1/analises:
+    get:
+      tags: [Análises]
+      summary: Lista os pareceres, os mais recentes primeiro
+      description: Consumida pelo BFF em `GET /v1/analises`, a rota da demo de 401 e 403.
+      operationId: listarAnalises
+      parameters:
+        - name: limite
+          in: query
+          required: false
+          description: Quantos pareceres devolver
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+      responses:
+        '200':
+          description: Pareceres, do mais recente para o mais antigo
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListaDeAnalises'
+              example:
+                analises:
+                  - solicitacaoId: 3f1c9a60-7b4e-4a21-9c0d-5e2a1b8f4d33
+                    elegivel: true
+                    valorAprovado: 18500.00
+                    motivo: Valor dentro do limite de concessão automática
+                    dataAnalise: '2026-10-25T10:00:00.123-03:00'
+                    valorSolicitado: 18500.00
+                    situacaoDaReserva: PENDENTE
+                  - solicitacaoId: 8b2d4e17-0a95-4c73-b6f1-2d9c7e5a1044
+                    elegivel: false
+                    valorAprovado: 0.00
+                    motivo: Valor acima do dobro do limite de concessão automática
+                    dataAnalise: '2026-10-25T09:40:52.004-03:00'
+                    valorSolicitado: 300000.00
+                    situacaoDaReserva: PENDENTE
+        '400':
+          description: '`limite` fora de 1 a 200'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Bad Request
+                status: 400
+                detail: limite deve ficar entre 1 e 200
+
+  /v1/analises/{solicitacaoId}:
+    get:
+      tags: [Análises]
+      summary: Parecer de uma solicitação
+      description: |
+        Consumida pelo BFF em `GET /v2/propostas/{id}`, que agrega o parecer com a proposta e o
+        antifraude.
+
+        Id fora do formato UUID também responde **404**, e não 400: para o circuit breaker do
+        BFF, 404 é resposta, e uma rajada de ids errados não deve abrir o circuito de um serviço
+        saudável (ADR-008).
+      operationId: buscarAnalise
+      parameters:
+        - name: solicitacaoId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: 3f1c9a60-7b4e-4a21-9c0d-5e2a1b8f4d33
+      responses:
+        '200':
+          description: O parecer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnaliseResposta'
+              example:
+                solicitacaoId: 3f1c9a60-7b4e-4a21-9c0d-5e2a1b8f4d33
+                elegivel: true
+                valorAprovado: 100000.00
+                motivo: 'Aprovado parcialmente: valor limitado a R$ 100.000,00'
+                dataAnalise: '2026-10-25T10:00:00.123-03:00'
+                valorSolicitado: 150000.00
+                situacaoDaReserva: RESERVADA
+        '404':
+          description: Ainda não há parecer para a solicitação, ou o id não é um UUID
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Not Found
+                status: 404
+                detail: 'Analise nao encontrada: 3f1c9a60-7b4e-4a21-9c0d-5e2a1b8f4d33'
+
+components:
+  schemas:
+
+    ListaDeAnalises:
+      type: object
+      description: Envelope da lista. Paginação entra depois como campo novo, sem quebrar quem consome.
+      required: [analises]
+      properties:
+        analises:
+          type: array
+          items:
+            $ref: '#/components/schemas/AnaliseResposta'
+
+    AnaliseResposta:
+      type: object
+      description: |
+        Os cinco primeiros campos espelham a carga de `risco.elegibilidade.v1`. `clienteId` fica
+        de fora: nenhum consumidor precisa dele, e dado que não sai não vaza.
+      required: [solicitacaoId, elegivel, valorAprovado, motivo, dataAnalise, valorSolicitado, situacaoDaReserva]
+      properties:
+        solicitacaoId:
+          type: string
+          format: uuid
+        elegivel:
+          type: boolean
+        valorAprovado:
+          type: number
+          multipleOf: 0.01
+          description: |
+            BRL. Até R$ 100.000,00 aprova o valor pedido; acima disso e até R$ 200.000,00 aprova
+            só R$ 100.000,00; recusado aprova 0.00.
+        motivo:
+          type: string
+        dataAnalise:
+          type: string
+          format: date-time
+          description: ISO-8601 com o offset de Brasília, o mesmo valor do `ce_time` do evento
+        valorSolicitado:
+          type: number
+          multipleOf: 0.01
+          description: BRL, como chegou em `credito.solicitacao.v1`
+        situacaoDaReserva:
+          type: string
+          enum: [PENDENTE, RESERVADA, CANCELADA]
+          description: Desfecho da saga de reserva de limite herdada da AED; só avança
+
+    ProblemDetail:
+      type: object
+      description: RFC 7807
+      properties:
+        type:
+          type: string
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string

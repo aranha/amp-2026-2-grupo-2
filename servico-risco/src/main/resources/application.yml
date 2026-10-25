@@ -1,12 +1,11 @@
 spring:
   application:
     name: servico-risco
-  main:
-    web-application-type: none
   datasource:
-    url: ${BANCO_URL:jdbc:postgresql://localhost:15432/aed}
-    username: ${BANCO_USUARIO:aed}
-    password: ${BANCO_SENHA:aed}
+    # Database per Service: o usuario risco_user so enxerga o schema risco (infra/postgres/init.sql).
+    url: ${BANCO_URL:jdbc:postgresql://localhost:15432/amp}
+    username: ${BANCO_USUARIO:risco_user}
+    password: ${BANCO_SENHA:risco}
   sql:
     init:
       mode: always
@@ -20,16 +19,35 @@ spring:
       group-id: risco-credito-v1
       enable-auto-commit: false
       auto-offset-reset: earliest
+      # Texto puro: cada adaptador traduz a carga, e a DLQ guarda os bytes que chegaram.
       key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
-      value-deserializer: org.springframework.kafka.support.serializer.ErrorHandlingDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
       properties:
-        spring.deserializer.value.delegate.class: org.springframework.kafka.support.serializer.JsonDeserializer
-        spring.json.trusted.packages: br.pucminas.aed.risco.domain
-        spring.json.use.type.headers: false
-        spring.json.value.default.type: br.pucminas.aed.risco.domain.CreditoSolicitadoEvent
         metadata.max.age.ms: 5000
     listener:
       ack-mode: manual_immediate
+
+# 8083 rodando local, como no README; dentro do compose e do Kubernetes, 8080, como os demais
+# servicos Java (o Dockerfile fixa SERVER_PORT).
+server:
+  port: ${SERVER_PORT:8083}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
 app:
   kafka:
     grupo:
@@ -41,7 +59,11 @@ app:
     reprocessamento-dlq:
       habilitado: ${REPROCESSAR_DLQ:false}
     topico:
-      credito-solicitado: credito.solicitacao.solicitada.v1
+      # credito.solicitacao.v1 e o topico do contrato (docs/contratos/asyncapi.yaml). O nome
+      # herdado da AED continua assinado enquanto o servico-credito publicar nele; sai daqui
+      # quando a migracao terminar.
+      solicitacao: credito.solicitacao.v1,credito.solicitacao.solicitada.v1
+      elegibilidade: risco.elegibilidade.v1
       limite-reservado: credito.limite.reservado.v1
       reserva-cancelada: credito.reserva-limite.cancelada.v1
       sufixo-dlq: ${KAFKA_SUFIXO_DLQ:.dlq}

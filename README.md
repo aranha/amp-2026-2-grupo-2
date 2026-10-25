@@ -29,7 +29,7 @@ repositório.
 |---|---|---|
 | Paulo Euclydes Aranha Junior **(líder)** | 255171 | Arquitetura e BFF |
 | Vinícius Eduardo Silva Oliveira | 1310290 | Crédito e CQRS |
-| Guilherme *(nome completo a confirmar)* | *a confirmar* | Risco e CI/CD |
+| Guilherme Henrique Jeske | 1665116 | Risco e CI/CD |
 | Hugo Fontolan Piani | 258724 | Antifraude (Python) |
 | Marcus Vinicius da Cruz Santos | 255495 | Contratação (Python) |
 | Rafael Oliveira de Lima | 258889 | Segurança e identidade |

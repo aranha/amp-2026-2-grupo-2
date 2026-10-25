@@ -219,8 +219,9 @@ paths:
         Exige a role `analista`. É a rota que demonstra a diferença entre 401 e 403:
         `maria.cliente` tem token válido e recebe 403; `ana.analista` recebe 200.
 
-        O dono desta leitura é o `servico-risco`. Enquanto ele não expuser REST, o BFF
-        responde de uma lista provisória.
+        O dono desta leitura é o `servico-risco`: o BFF busca em `GET /v1/analises` do Risco
+        (`openapi-risco.yaml`), com retry, circuit breaker e bulkhead. Aqui o Risco é a única
+        fonte, então não há resposta parcial: fora do ar, **503** com `fonte: risco`.
       operationId: listarAnalises
       responses:
         '200':
@@ -235,12 +236,24 @@ paths:
                   - solicitacaoId: 3f1c9a60-7b4e-4a21-9c0d-5e2a1b8f4d33
                     elegivel: true
                     valorAprovado: 18500.00
-                    motivo: Renda compatível e sem restrição
+                    motivo: Valor dentro do limite de concessão automática
                     dataAnalise: '2026-10-24T13:02:11Z'
         '401':
           $ref: '#/components/responses/SemToken'
         '403':
           $ref: '#/components/responses/SemRole'
+        '503':
+          description: O Risco não respondeu — por timeout, erro ou circuito aberto
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetail'
+              example:
+                type: about:blank
+                title: Service Unavailable
+                status: 503
+                detail: 'Fonte indisponivel: risco'
+                fonte: risco
 
 components:
 

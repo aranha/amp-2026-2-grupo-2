@@ -5,7 +5,7 @@
 | `asyncapi.yaml` — 6 tópicos: canal, produtor, consumidores, schema, headers CloudEvents | Vinicius | **17/10** |
 | [`openapi-bff.yaml`](openapi-bff.yaml) — `/v1/propostas`, `/v2/propostas`, `/v1/analises` | Paulo | Sprint 1 ✅ |
 | `openapi-credito.yaml` | Vinicius | Sprint 1 |
-| `openapi-risco.yaml` | Guilherme | Sprint 1 |
+| [`openapi-risco.yaml`](openapi-risco.yaml) — `/v1/analises`, `/v1/analises/{id}` | Guilherme | Sprint 1 ✅ |
 | `openapi-antifraude.yaml` | Hugo | Sprint 1 |
 | `openapi-contratacao.yaml` | Marcus | Sprint 1 |
 
