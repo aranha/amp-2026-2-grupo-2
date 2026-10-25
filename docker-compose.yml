@@ -196,6 +196,11 @@ services:
     environment:
       BANCO_URL: postgresql://antifraude_user:antifraude@postgres:5432/amp
       KAFKA_BOOTSTRAP_SERVERS: kafka:9094
+      OTEL_SERVICE_NAME: servico-antifraude
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+      OTEL_LOGS_EXPORTER: otlp
+      OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED: "true"
+      OTEL_PYTHON_FASTAPI_EXCLUDED_URLS: /health
     depends_on:
       postgres:
         condition: service_healthy

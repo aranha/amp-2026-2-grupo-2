@@ -18,4 +18,4 @@ COPY adapters ./adapters
 
 USER nobody
 EXPOSE 8084
-CMD ["uvicorn", "adapters.http_api:app", "--host", "0.0.0.0", "--port", "8084"]
+CMD ["opentelemetry-instrument", "uvicorn", "adapters.http_api:app", "--host", "0.0.0.0", "--port", "8084"]

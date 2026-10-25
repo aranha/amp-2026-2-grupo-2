@@ -104,7 +104,7 @@ do Java, o trabalho inteiro perde o eixo de comunicação.
 **Código** — `servico-antifraude/` em Python 3.12 / FastAPI
 - Clean Architecture em Python: `domain/` sem import de framework
 - Agregado `AnaliseAntifraude` com regra de score
-- Consome `risco.elegibilidade.v1`, produz `antifraude.analise.v1` e `antifraude.fraude.v1`
+- Consome `risco.elegibilidade.v1`, produz `antifraude.analise.v1` (sem `antifraude.fraude.v1`: ver ADR-006)
 - Schema `antifraude` com usuário próprio
 - `pytest` do domínio sem FastAPI e sem banco
 
