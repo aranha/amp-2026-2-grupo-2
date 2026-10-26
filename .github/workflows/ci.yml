@@ -1,6 +1,15 @@
 # Pipeline do trabalho. Dono: Guilherme (trilha/risco).
 # Prova dois itens da ementa de uma vez: automação de teste em mais de uma linguagem
 # e gerenciamento de dependências por plataforma (Maven e pip).
+#
+#   teste-java   ─┐
+#                 ├─► build ─► push ─► deploy
+#   teste-python ─┘
+#
+# Em PR: os testes e o build, que já pega Dockerfile quebrado antes do merge.
+# Na main: o build guarda cada imagem como artefato; o push publica no GHCR exatamente
+# essas imagens e o deploy carrega as mesmas num cluster kind dentro do runner.
+# Decisões e trade-offs na ADR-011.
 
 name: CI
 
@@ -9,6 +18,14 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+
+# Push novo num PR cancela a execução anterior dele; na main nada é cancelado.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
 
 env:
   REGISTRY: ghcr.io
@@ -23,14 +40,23 @@ jobs:
       matrix:
         servico: [bff, servico-credito, servico-risco]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v6
         with:
           java-version: '21'
           distribution: temurin
           cache: maven
-      - name: Testes de domínio — sem framework, sem banco
+          cache-dependency-path: ${{ matrix.servico }}/pom.xml
+      # Domínio sem framework e sem banco, mais a integração com Kafka embarcado e H2.
+      - name: Testes — Maven
         run: mvn -B -f ${{ matrix.servico }}/pom.xml test
+      - name: Relatórios do Surefire
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: surefire-${{ matrix.servico }}
+          path: ${{ matrix.servico }}/target/surefire-reports/
+          retention-days: 7
 
   teste-python:
     name: Teste · Python
@@ -40,11 +66,12 @@ jobs:
       matrix:
         servico: [servico-antifraude, servico-contratacao]
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip
+          cache-dependency-path: ${{ matrix.servico }}/pyproject.toml
       - name: Instalar dependências
         shell: bash
         run: |
@@ -56,49 +83,127 @@ jobs:
             echo "::error::Nenhum pyproject.toml ou requirements.txt encontrado em ${{ matrix.servico }}"
             exit 1
           fi
-      - name: Testes de domínio — sem framework, sem banco
+      - name: Testes — pytest
         run: pytest ${{ matrix.servico }}/tests -v
 
   build:
-    name: Build e push
+    name: Build
     needs: [teste-java, teste-python]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        servico: [bff, servico-credito, servico-risco, servico-antifraude, servico-contratacao, app-cliente]
+    steps:
+      - uses: actions/checkout@v7
+      - name: Conferir o Dockerfile
+        run: |
+          if [[ ! -f "${{ matrix.servico }}/Dockerfile" ]]; then
+            echo "::error file=${{ matrix.servico }}::${{ matrix.servico }} ainda não tem Dockerfile multi-stage (checklist B57)"
+            exit 1
+          fi
+      - uses: docker/setup-buildx-action@v4
+      # Cache por serviço: sem o scope, as seis pernas da matriz sobrescrevem o mesmo índice.
+      - name: Build multi-stage
+        uses: docker/build-push-action@v7
+        with:
+          context: ./${{ matrix.servico }}
+          tags: ${{ matrix.servico }}:${{ github.sha }}
+          outputs: ${{ github.ref == 'refs/heads/main' && format('type=docker,dest=/tmp/{0}.tar', matrix.servico) || 'type=cacheonly' }}
+          cache-from: type=gha,scope=${{ matrix.servico }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.servico }}
+      - name: Guardar a imagem para o push e o deploy
+        if: github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@v7
+        with:
+          name: imagem-${{ matrix.servico }}
+          path: /tmp/${{ matrix.servico }}.tar
+          retention-days: 1
+
+  push:
+    name: Push · GHCR
+    needs: build
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     strategy:
+      fail-fast: false
       matrix:
-        servico: [bff, servico-credito, servico-risco, servico-antifraude, servico-contratacao]
+        servico: [bff, servico-credito, servico-risco, servico-antifraude, servico-contratacao, app-cliente]
     steps:
-      - uses: actions/checkout@v4
-      - uses: docker/setup-buildx-action@v3
-      - uses: docker/login-action@v3
+      - uses: actions/download-artifact@v8
+        with:
+          name: imagem-${{ matrix.servico }}
+          path: /tmp
+      - uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Build multi-stage e push
-        uses: docker/build-push-action@v6
-        with:
-          context: ./${{ matrix.servico }}
-          push: true
-          tags: ${{ env.REGISTRY }}/${{ github.repository }}/${{ matrix.servico }}:${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Publicar com a tag do commit e latest
+        env:
+          SERVICO: ${{ matrix.servico }}
+        run: |
+          docker load --input "/tmp/${SERVICO}.tar"
+          destino="${REGISTRY}/${GITHUB_REPOSITORY,,}/${SERVICO}"
+          for tag in "${GITHUB_SHA}" latest; do
+            docker tag "${SERVICO}:${GITHUB_SHA}" "${destino}:${tag}"
+            docker push "${destino}:${tag}"
+          done
 
   deploy:
-    name: Deploy em kind
-    needs: build
+    name: Deploy · kind
+    needs: push
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - name: Conferir os manifests
+        id: manifests
+        run: |
+          if compgen -G "infra/k8s/*.yaml" > /dev/null; then
+            echo "existem=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::infra/k8s/ ainda não tem manifests; deploy pulado até a trilha/plataforma entregar"
+            echo "existem=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: actions/download-artifact@v8
+        if: steps.manifests.outputs.existem == 'true'
+        with:
+          pattern: imagem-*
+          path: /tmp/imagens
+          merge-multiple: true
       - name: Subir cluster kind
-        uses: helm/kind-action@v1
+        if: steps.manifests.outputs.existem == 'true'
+        uses: helm/kind-action@v1.15.1
+        with:
+          cluster_name: amp
+      # Os manifests apontam para <registry>/<repo>/<servico>:latest com imagePullPolicy
+      # IfNotPresent: o nó usa a imagem carregada aqui e não precisa de credencial do GHCR.
+      - name: Carregar as imagens no cluster
+        if: steps.manifests.outputs.existem == 'true'
+        run: |
+          for arquivo in /tmp/imagens/*.tar; do
+            servico=$(basename "$arquivo" .tar)
+            destino="${REGISTRY}/${GITHUB_REPOSITORY,,}/${servico}"
+            docker load --input "$arquivo"
+            docker tag "${servico}:${GITHUB_SHA}" "${destino}:${GITHUB_SHA}"
+            docker tag "${servico}:${GITHUB_SHA}" "${destino}:latest"
+            kind load docker-image --name amp "${destino}:${GITHUB_SHA}" "${destino}:latest"
+          done
       - name: Aplicar manifests
+        if: steps.manifests.outputs.existem == 'true'
         run: kubectl apply -f infra/k8s/
       - name: Esperar os Deployments
-        run: kubectl rollout status -n amp deployment --timeout=180s
+        if: steps.manifests.outputs.existem == 'true'
+        run: kubectl wait --for=condition=Available deployment --all -n amp --timeout=300s
       # Plano B, se o kind não fechar a tempo:
       #   run: kubectl apply -f infra/k8s/ --dry-run=server
+      - name: Estado do cluster
+        if: failure() && steps.manifests.outputs.existem == 'true'
+        run: |
+          kubectl get pods -n amp -o wide
+          kubectl describe pods -n amp
+          kubectl get events -n amp --sort-by=.lastTimestamp

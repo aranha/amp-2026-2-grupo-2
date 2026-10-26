@@ -37,6 +37,10 @@ hostname público, que não é o endereço do JWKS dentro do compose.
 com `ana.analista` é **200**. CORS liberado só para `http://localhost:5173`, a origem da SPA —
 sem isso o navegador derruba o preflight e a tela mostra "BFF indisponível" em vez do 401.
 
+Os pareceres vêm do `servico-risco` (`AnalisesClient`, mesma instância `risco` de retry,
+circuit breaker e bulkhead). Ali o risco é a única fonte, então não degrada: fora do ar, **503**
+com `fonte: risco`.
+
 Sobrescrevíveis por ambiente: `OIDC_ISSUER`, `OIDC_JWKS`, `OIDC_AUDIENCE`, `CORS_ORIGENS`.
 
 No `docker-compose.yml` os dois primeiros apontam para lugares **diferentes de propósito**:

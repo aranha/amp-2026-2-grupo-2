@@ -1,16 +1,22 @@
 package br.pucminas.aed.bff.seguranca;
 
+import br.pucminas.aed.bff.analise.AnaliseResumo;
+import br.pucminas.aed.bff.analise.AnalisesClient;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
+import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 
+import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.authentication;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.options;
@@ -24,6 +30,9 @@ class SegurancaDaApiTest {
 
     @Autowired
     private MockMvc mockMvc;
+
+    @MockBean
+    private AnalisesClient risco;
 
     @Test
     void semTokenDevolve401() throws Exception {
@@ -39,6 +48,9 @@ class SegurancaDaApiTest {
 
     @Test
     void comRoleAnalistaDevolve200EOUsuarioDoToken() throws Exception {
+        when(risco.listar()).thenReturn(List.of(new AnaliseResumo("3f1c9a60-7b4e-4a21-9c0d-5e2a1b8f4d33",
+            true, new BigDecimal("18500.00"), "Valor dentro do limite", Instant.parse("2026-10-25T13:00:00Z"))));
+
         mockMvc.perform(get("/v1/analises").with(token("ana.analista", "analista")))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.consultadoPor").value("ana.analista"))
