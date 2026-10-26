@@ -186,6 +186,34 @@ services:
   #   servico-contratacao  → Marcus   (Python)  porta 8085
   #   app-cliente          → Rafael   (SPA)     porta 5173
 
+  # Dentro da rede escuta em 8080, como os outros serviços Java: é o CREDITO_URL do bff.
+  servico-credito:
+    build:
+      context: ./servico-credito
+    profiles: ["apps"]
+    container_name: amp-servico-credito
+    ports:
+      - "8082:8080"
+    environment:
+      BANCO_URL: jdbc:postgresql://postgres:5432/amp
+      BANCO_USUARIO: credito_user
+      BANCO_SENHA: credito
+      KAFKA_BOOTSTRAP_SERVERS: kafka:9094
+      # Os scripts do agregado (DDD) e do read model (CQRS) entram no init junto com o legado:
+      # credito_user é dono do schema credito, então cria as tabelas sem passo manual.
+      SPRING_SQL_INIT_SCHEMA_LOCATIONS: classpath:schema.sql,classpath:schema-credito-ddd.sql,classpath:schema-credito-cqrs.sql
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/actuator/health/readiness | grep -q UP"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
   # Dentro da rede escuta em 8080, como os outros serviços Java: é o RISCO_URL do bff.
   servico-risco:
     build:
