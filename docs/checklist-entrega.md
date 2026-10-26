@@ -108,10 +108,10 @@ alta com o grupo. Item sem prova apontável volta a ser `[ ]`.
 | B55 | ☐ Dashboard de **fila** | Sesaque | lag por consumer group, throughput, DLQ |
 | B56 | ☐ Dashboard de **cluster** | Sesaque | CPU, memória, heap JVM, GC |
 | B57 | ☐ **Docker multi-stage** | cada dono | 5 Dockerfiles |
-| B58 | ☑ K8s: **Deployment** | Sesaque | `infra/k8s/30-35-*.yaml` |
-| B59 | ☑ K8s: **Service** | Sesaque | `infra/k8s/` |
-| B60 | ☑ K8s: **ConfigMap e Secret** | Sesaque | `infra/k8s/` |
-| B61 | ☑ K8s: **self-healing** | Sesaque | `kubectl delete pod` → recriado |
+| B58 | ☑ K8s: **Deployment** | Sesaque | `infra/k8s/30-*` a `35-*`, com probes e rolling update |
+| B59 | ☑ K8s: **Service** | Sesaque | `infra/k8s/`, um por componente; headless no Postgres e no Kafka |
+| B60 | ☑ K8s: **ConfigMap e Secret** | Sesaque | `infra/k8s/10-configmap.yaml` · `11-secret.yaml` |
+| B61 | ☑ K8s: **self-healing** | Sesaque | `scripts/demo.sh` passo 9: `kubectl delete pod` → recriado |
 | B62 | ☐ **CI/CD**: teste, build, push e deploy | Guilherme | `.github/workflows/ci.yml` |
 
 ### B.6 Itens da ementa sem aula própria — citar em um slide
