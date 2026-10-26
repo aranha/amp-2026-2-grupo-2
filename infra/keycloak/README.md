@@ -43,6 +43,9 @@ spring.security.oauth2.resourceserver.jwt:
 - A audience `bff-api` vem do client scope `bff-api` (mapper `audience-bff-api`), atribuído como
   *Default* só ao `app-cliente`. Token do M2M **não** carrega `bff-api` — o BFF responde 401.
 - Access token vale **5 minutos** (`accessTokenLifespan = 300`).
+- **Email fora do access token** (minimização, LGPD): nos mappers `email` e `email verified` do
+  client scope `email`, *Add to access token* e *Add to token introspection* estão desligados.
+  O email continua no ID token e no userinfo.
 - Os secrets dos clients confidenciais estão no JSON (campo `secret`). São de desenvolvimento local;
   em produção viriam de um cofre / `Secret` do Kubernetes, nunca do repositório.
 

@@ -1,32 +1,21 @@
 import { userManager, decodificarPayload } from './auth.js';
+import { el } from './dom.js';
+import { telaSolicitar } from './telas/solicitar.js';
+import { telaConsultar } from './telas/consultar.js';
+import { telaAnalises } from './telas/analises.js';
+import { telaToken } from './telas/token.js';
 
-const BFF_URL = import.meta.env.VITE_BFF_URL ?? 'http://localhost:8080';
 const app = document.getElementById('app');
+const ROLES_DE_NEGOCIO = ['cliente', 'analista', 'operador'];
 
-// Cria elementos com textContent, nunca innerHTML: nada vindo do token ou do BFF
-// é interpretado como HTML (evita XSS, que poderia roubar o token).
-function el(tag, props = {}, ...filhos) {
-  const node = Object.assign(document.createElement(tag), props);
-  node.append(...filhos);
-  return node;
-}
-
-async function chamarBff(caminho, comToken) {
-  const saida = document.getElementById('resposta');
-  saida.textContent = '...';
-  const headers = {};
-  if (comToken) {
-    const user = await userManager.getUser();
-    headers.Authorization = `Bearer ${user.access_token}`;
-  }
-  try {
-    const resp = await fetch(`${BFF_URL}${caminho}`, { headers });
-    const corpo = await resp.text();
-    saida.textContent = `GET ${caminho} → ${resp.status} ${resp.statusText}\n\n${corpo}`;
-  } catch (erro) {
-    saida.textContent = `GET ${caminho} → BFF indisponível em ${BFF_URL} (${erro.message})`;
-  }
-}
+// Todas as abas aparecem para todos. Esconder menu é conveniência, não segurança: quem decide
+// é o BFF — e a demo do 403 precisa que a Maria consiga tentar abrir as análises.
+const ABAS = [
+  { id: 'solicitar', rotulo: 'Solicitar crédito' },
+  { id: 'consultar', rotulo: 'Consultar proposta' },
+  { id: 'analises', rotulo: 'Análises' },
+  { id: 'token', rotulo: 'Meu token' },
+];
 
 function telaDeslogado() {
   app.replaceChildren(
@@ -38,28 +27,38 @@ function telaDeslogado() {
 
 function telaLogado(user) {
   const payload = decodificarPayload(user.access_token);
-  const roles = payload.realm_access?.roles ?? [];
-  const expira = new Date(payload.exp * 1000).toLocaleTimeString('pt-BR');
+  const roles = (payload.realm_access?.roles ?? []).filter((r) => ROLES_DE_NEGOCIO.includes(r));
+  const conteudo = el('div');
+  const botoes = new Map();
+
+  function abrir(aba, opcoes = {}) {
+    botoes.forEach((botao, id) => botao.setAttribute('aria-selected', String(id === aba)));
+    const telas = {
+      solicitar: () => telaSolicitar({ sub: payload.sub, acompanhar: (id) => abrir('consultar', { solicitacaoId: id }) }),
+      consultar: () => telaConsultar(opcoes),
+      analises: () => telaAnalises(),
+      token: () => telaToken(payload, user.access_token),
+    };
+    conteudo.replaceChildren(telas[aba]());
+  }
+
+  for (const aba of ABAS) {
+    botoes.set(aba.id, el('button', { className: 'aba', role: 'tab', textContent: aba.rotulo, onclick: () => abrir(aba.id) }));
+  }
 
   app.replaceChildren(
-    el('h1', { textContent: 'Concessão de Crédito' }),
-    el('p', {}, 'Olá, ', el('strong', { textContent: payload.name ?? payload.preferred_username })),
-    el('ul', {},
-      el('li', { textContent: `Roles: ${roles.filter((r) => ['cliente', 'analista', 'operador'].includes(r)).join(', ') || '—'}` }),
-      el('li', { textContent: `Audience: ${[].concat(payload.aud).join(', ')}` }),
-      el('li', { textContent: `Token expira às ${expira}` }),
+    el('header', { className: 'topo' },
+      el('h1', { textContent: 'Concessão de Crédito' }),
+      el('div', { className: 'usuario' },
+        el('span', { textContent: payload.name ?? payload.preferred_username }),
+        ...roles.map((r) => el('span', { className: 'role', textContent: r })),
+        el('button', { textContent: 'Sair', className: 'secundario', onclick: () => userManager.signoutRedirect() }),
+      ),
     ),
-    el('div', { className: 'acoes' },
-      el('button', { textContent: 'GET /v1/analises com token', onclick: () => chamarBff('/v1/analises', true) }),
-      el('button', { textContent: 'GET /v1/analises sem token', onclick: () => chamarBff('/v1/analises', false) }),
-      el('button', { textContent: 'Sair', className: 'secundario', onclick: () => userManager.signoutRedirect() }),
-    ),
-    el('pre', { id: 'resposta' }),
-    el('details', {},
-      el('summary', { textContent: 'Conteúdo do access token' }),
-      el('pre', { textContent: JSON.stringify(payload, null, 2) }),
-    ),
+    el('nav', { className: 'abas', role: 'tablist' }, ...botoes.values()),
+    conteudo,
   );
+  abrir(roles.includes('analista') ? 'analises' : 'solicitar');
 }
 
 async function iniciar() {

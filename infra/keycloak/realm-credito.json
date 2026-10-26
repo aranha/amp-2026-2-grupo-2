@@ -1412,11 +1412,11 @@
       "protocolMapper" : "oidc-usermodel-property-mapper",
       "consentRequired" : false,
       "config" : {
-        "introspection.token.claim" : "true",
+        "introspection.token.claim" : "false",
         "userinfo.token.claim" : "true",
         "user.attribute" : "emailVerified",
         "id.token.claim" : "true",
-        "access.token.claim" : "true",
+        "access.token.claim" : "false",
         "claim.name" : "email_verified",
         "jsonType.label" : "boolean"
       }
@@ -1427,11 +1427,11 @@
       "protocolMapper" : "oidc-usermodel-attribute-mapper",
       "consentRequired" : false,
       "config" : {
-        "introspection.token.claim" : "true",
+        "introspection.token.claim" : "false",
         "userinfo.token.claim" : "true",
         "user.attribute" : "email",
         "id.token.claim" : "true",
-        "access.token.claim" : "true",
+        "access.token.claim" : "false",
         "claim.name" : "email",
         "jsonType.label" : "String"
       }
