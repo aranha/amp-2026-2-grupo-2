@@ -1,0 +1,125 @@
+# Serviço de contratação (Marcus), em Python, com o core bancário em processo.
+# A imagem roda como root; aqui o pod força o usuário nobody.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: servico-contratacao
+  namespace: amp
+  labels:
+    app: servico-contratacao
+    app.kubernetes.io/name: servico-contratacao
+    app.kubernetes.io/component: dominio
+    app.kubernetes.io/part-of: amp-credito
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  # Sobe o novo antes de derrubar o antigo: a troca de versão não deixa o serviço sem pod pronto.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: servico-contratacao
+  template:
+    metadata:
+      labels:
+        app: servico-contratacao
+        app.kubernetes.io/name: servico-contratacao
+        app.kubernetes.io/component: dominio
+        app.kubernetes.io/part-of: amp-credito
+    spec:
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        runAsGroup: 65534
+        seccompProfile: { type: RuntimeDefault }
+      # Sem banco o serviço cai no boot (schema.sql roda na subida). Esperar aqui evita uma
+      # sequência de CrashLoopBackOff só porque o Postgres ainda está inicializando.
+      initContainers:
+        - name: aguarda-postgres
+          image: postgres:16-alpine
+          command: ["sh", "-c", "until pg_isready -h postgres -p 5432 -U amp -t 2; do echo aguardando postgres; sleep 2; done"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { memory: 32Mi }
+      containers:
+        - name: servico-contratacao
+          # Contrato com o job deploy do CI: a imagem é carregada no kind pelo próprio pipeline,
+          # então IfNotPresent — com Always o nó tentaria baixar do GHCR (ADR-011).
+          image: ghcr.io/aranha/amp-2026-2-grupo-2/servico-contratacao:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8085
+          env:
+            - name: BANCO_SENHA
+              valueFrom:
+                secretKeyRef: { name: amp-banco, key: CONTRATACAO_SENHA }
+            - name: CONTRACTING_DATABASE_URL
+              value: postgresql://contratacao_user:$(BANCO_SENHA)@postgres:5432/amp
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              valueFrom:
+                configMapKeyRef: { name: amp-config, key: KAFKA_BOOTSTRAP_SERVERS }
+            - name: CONTRACTING_ENABLE_KAFKA
+              value: "true"
+            - name: CONTRACTING_CORE_BANK_MODE
+              value: inprocess
+            - name: OTEL_SERVICE_NAME
+              value: servico-contratacao
+            - name: OTEL_SDK_DISABLED
+              valueFrom:
+                configMapKeyRef: { name: amp-config, key: OTEL_SDK_DISABLED }
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef: { name: amp-config, key: OTEL_EXPORTER_OTLP_ENDPOINT }
+          startupProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 3
+            failureThreshold: 20
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: { cpu: 50m, memory: 128Mi }
+            limits: { memory: 256Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          # Raiz somente leitura; o único lugar gravável é o /tmp (Tomcat, uvicorn).
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: servico-contratacao
+  namespace: amp
+  labels:
+    app.kubernetes.io/name: servico-contratacao
+    app.kubernetes.io/part-of: amp-credito
+spec:
+  selector:
+    app: servico-contratacao
+  ports:
+    - name: http
+      port: 8085
+      targetPort: http

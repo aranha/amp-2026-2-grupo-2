@@ -1,0 +1,28 @@
+# Configuração que não é segredo, compartilhada pelos serviços. Os endereços são nomes de
+# Service do namespace amp — o DNS do cluster resolve, como os nomes de serviço no compose.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: amp-config
+  namespace: amp
+  labels:
+    app.kubernetes.io/part-of: amp-credito
+data:
+  KAFKA_BOOTSTRAP_SERVERS: kafka:9092
+  BANCO_HOST: postgres
+  BANCO_PORTA: "5432"
+  BANCO_NOME: amp
+  BANCO_URL_JDBC: jdbc:postgresql://postgres:5432/amp
+
+  # Keycloak fica no compose (ADR-011). O iss é o mesmo que o navegador enxerga.
+  OIDC_ISSUER: http://localhost:8180/realms/credito
+  OIDC_AUDIENCE: bff-api
+
+  # A stack de observabilidade (Collector, Tempo, Loki, Prometheus, Grafana) fica no compose:
+  # no cluster os SDKs ficam desligados em vez de tentar exportar para um Collector que não existe.
+  OTEL_SDK_DISABLED: "true"
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+
+  # Heap proporcional ao limite de memória do container. JDK_JAVA_OPTIONS, e não
+  # JAVA_TOOL_OPTIONS: este é o da imagem (agente OpenTelemetry) e não pode ser sobrescrito.
+  JDK_JAVA_OPTIONS: -XX:MaxRAMPercentage=70 -XX:+ExitOnOutOfMemoryError

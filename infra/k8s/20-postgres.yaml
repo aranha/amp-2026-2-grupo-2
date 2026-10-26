@@ -1,0 +1,154 @@
+# Postgres em StatefulSet: identidade estável (postgres-0) e disco próprio, que sobrevive ao pod.
+# Um banco, um schema e um usuário por serviço — o mesmo Database per Service do compose
+# (ADR-002). O init roda só na primeira subida, com o volume vazio.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-init
+  namespace: amp
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/part-of: amp-credito
+data:
+  # Espelho de infra/postgres/init.sql: mudou lá, muda aqui.
+  10-init.sql: |
+    -- Database per Service, versão lógica: um schema e um usuário por serviço,
+    -- cada um com GRANT só no próprio schema. Nenhum JOIN cruza fronteira.
+    --
+    -- Demonstrável ao vivo:
+    --   \c amp credito_user
+    --   SELECT * FROM risco.analise;  -->  ERROR: permission denied for schema risco
+
+    CREATE SCHEMA IF NOT EXISTS credito;
+    CREATE SCHEMA IF NOT EXISTS risco;
+    CREATE SCHEMA IF NOT EXISTS antifraude;
+    CREATE SCHEMA IF NOT EXISTS contratacao;
+
+    CREATE USER credito_user     WITH PASSWORD 'credito';
+    CREATE USER risco_user       WITH PASSWORD 'risco';
+    CREATE USER antifraude_user  WITH PASSWORD 'antifraude';
+    CREATE USER contratacao_user WITH PASSWORD 'contratacao';
+
+    -- Cada usuário é dono do seu schema e não enxerga os outros.
+    ALTER SCHEMA credito     OWNER TO credito_user;
+    ALTER SCHEMA risco       OWNER TO risco_user;
+    ALTER SCHEMA antifraude  OWNER TO antifraude_user;
+    ALTER SCHEMA contratacao OWNER TO contratacao_user;
+
+    -- Revoga o acesso implícito do schema public.
+    REVOKE ALL ON SCHEMA public FROM PUBLIC;
+
+    ALTER ROLE credito_user     SET search_path TO credito;
+    ALTER ROLE risco_user       SET search_path TO risco;
+    ALTER ROLE antifraude_user  SET search_path TO antifraude;
+    ALTER ROLE contratacao_user SET search_path TO contratacao;
+---
+# Headless: o DNS "postgres" resolve direto para o IP do pod, sem proxy no meio.
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: amp
+  labels:
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/part-of: amp-credito
+spec:
+  clusterIP: None
+  selector:
+    app: postgres
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: postgres
+  namespace: amp
+  labels:
+    app: postgres
+    app.kubernetes.io/name: postgres
+    app.kubernetes.io/component: banco
+    app.kubernetes.io/part-of: amp-credito
+spec:
+  serviceName: postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+        app.kubernetes.io/name: postgres
+        app.kubernetes.io/component: banco
+        app.kubernetes.io/part-of: amp-credito
+    spec:
+      # Sem as variáveis POSTGRES_PORT=tcp://... que o Kubernetes injetaria pelo Service.
+      enableServiceLinks: false
+      # Usuário postgres (uid 70) da imagem alpine, sem root nem no boot.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 70
+        runAsGroup: 70
+        fsGroup: 70
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef: { name: amp-config, key: BANCO_NOME }
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef: { name: amp-banco, key: POSTGRES_USER }
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: { name: amp-banco, key: POSTGRES_PASSWORD }
+            # Subpasta: a raiz do volume pode vir com lost+found, e o initdb exige pasta vazia.
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 5
+            timeoutSeconds: 3
+          livenessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { memory: 512Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+          volumeMounts:
+            - name: dados
+              mountPath: /var/lib/postgresql/data
+            - name: init
+              mountPath: /docker-entrypoint-initdb.d
+              readOnly: true
+      volumes:
+        - name: init
+          configMap:
+            name: postgres-init
+  # PVC por réplica (dados-postgres-0): apagar o pod não apaga o disco.
+  volumeClaimTemplates:
+    - metadata:
+        name: dados
+        labels:
+          app.kubernetes.io/name: postgres
+          app.kubernetes.io/part-of: amp-credito
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 1Gi

@@ -36,7 +36,7 @@ alta com o grupo. Item sem prova apontável volta a ser `[ ]`.
 | B3 | ☐ Pelo menos **duas linguagens/runtimes** e o motivo de cada | Paulo | **ADR-003** · Java em 3 serviços, Python em 2 |
 | B4 | ☐ Eixo **comunicação**: síncrona e assíncrona | Paulo | `arquitetura.md` §3.2 |
 | B5 | ☐ Eixo **dados**: Database per Service | Vinicius | **ADR-002** · schema + usuário por serviço |
-| B6 | ☐ Eixo **implantação**: containers e orquestração | Sesaque | **ADR-011** · `infra/k8s/` |
+| B6 | ☑ Eixo **implantação**: containers e orquestração | Sesaque | **ADR-011** · `infra/k8s/` |
 | B7 | ☐ **C4 nível 1** — Contexto | Paulo | `docs/c4/n1-contexto.*` |
 | B8 | ☐ **C4 nível 2** — Container | Paulo | `docs/c4/n2-container.*` |
 | B9 | ☐ **C4 nível 3** — Componente de pelo menos um serviço | Paulo + Vinicius | `docs/c4/n3-componente-bff.*` e `n3-componente-credito.*` |
@@ -108,10 +108,10 @@ alta com o grupo. Item sem prova apontável volta a ser `[ ]`.
 | B55 | ☐ Dashboard de **fila** | Sesaque | lag por consumer group, throughput, DLQ |
 | B56 | ☐ Dashboard de **cluster** | Sesaque | CPU, memória, heap JVM, GC |
 | B57 | ☐ **Docker multi-stage** | cada dono | 5 Dockerfiles |
-| B58 | ☐ K8s: **Deployment** | Sesaque | `infra/k8s/` |
-| B59 | ☐ K8s: **Service** | Sesaque | `infra/k8s/` |
-| B60 | ☐ K8s: **ConfigMap e Secret** | Sesaque | `infra/k8s/` |
-| B61 | ☐ K8s: **self-healing** | Sesaque | `kubectl delete pod` → recriado |
+| B58 | ☑ K8s: **Deployment** | Sesaque | `infra/k8s/30-35-*.yaml` |
+| B59 | ☑ K8s: **Service** | Sesaque | `infra/k8s/` |
+| B60 | ☑ K8s: **ConfigMap e Secret** | Sesaque | `infra/k8s/` |
+| B61 | ☑ K8s: **self-healing** | Sesaque | `kubectl delete pod` → recriado |
 | B62 | ☐ **CI/CD**: teste, build, push e deploy | Guilherme | `.github/workflows/ci.yml` |
 
 ### B.6 Itens da ementa sem aula própria — citar em um slide

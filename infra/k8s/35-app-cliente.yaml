@@ -1,0 +1,71 @@
+# SPA (Rafael): nginx servindo o build do Vite. As URLs do Keycloak e do BFF vão embutidas
+# no JavaScript como localhost — no cluster, acessar com port-forward (infra/k8s/README.md).
+# O nginx oficial precisa de root para preparar cache e pid: fica no perfil baseline.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: app-cliente
+  namespace: amp
+  labels:
+    app: app-cliente
+    app.kubernetes.io/name: app-cliente
+    app.kubernetes.io/component: frontend
+    app.kubernetes.io/part-of: amp-credito
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  # Sobe o novo antes de derrubar o antigo: a troca de versão não deixa o serviço sem pod pronto.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: app-cliente
+  template:
+    metadata:
+      labels:
+        app: app-cliente
+        app.kubernetes.io/name: app-cliente
+        app.kubernetes.io/component: frontend
+        app.kubernetes.io/part-of: amp-credito
+    spec:
+      enableServiceLinks: false
+      containers:
+        - name: app-cliente
+          # Contrato com o job deploy do CI: a imagem é carregada no kind pelo próprio pipeline,
+          # então IfNotPresent — com Always o nó tentaria baixar do GHCR (ADR-011).
+          image: ghcr.io/aranha/amp-2026-2-grupo-2/app-cliente:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80
+          env:
+            - name: NGINX_ENTRYPOINT_QUIET_LOGS
+              value: "1"
+          livenessProbe:
+            httpGet: { path: /, port: http }
+            periodSeconds: 10
+          readinessProbe:
+            httpGet: { path: /, port: http }
+            periodSeconds: 5
+          resources:
+            requests: { cpu: 10m, memory: 32Mi }
+            limits: { memory: 64Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: app-cliente
+  namespace: amp
+  labels:
+    app.kubernetes.io/name: app-cliente
+    app.kubernetes.io/part-of: amp-credito
+spec:
+  selector:
+    app: app-cliente
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

@@ -1,0 +1,12 @@
+# Tudo do trabalho mora no namespace amp: `kubectl delete namespace amp` limpa o cluster inteiro.
+# Pod Security Admission: barra o que o perfil baseline proíbe (privileged, hostPath, hostNetwork)
+# e avisa o que não atende o restricted. Hoje só o nginx da SPA cai no aviso: a imagem oficial
+# precisa de root para preparar cache e pid.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: amp
+  labels:
+    app.kubernetes.io/part-of: amp-credito
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/warn: restricted

@@ -2,8 +2,8 @@
 
 ## Status
 
-Proposto. Docker e CI/CD pela `trilha/risco` (Guilherme); a seção de Kubernetes registra o que o
-plano já decidiu e fecha com os manifests da `trilha/plataforma` (Sesaque).
+Aceito. Docker e CI/CD pela `trilha/risco` (Guilherme); Kubernetes pela `trilha/plataforma`
+(Sesaque), com os manifests em [`infra/k8s/`](../../infra/k8s/).
 
 ## Contexto
 
@@ -70,11 +70,39 @@ Detalhes que valem como decisão:
 
 ### Kubernetes
 
-Do plano de trabalho (§3.9), a confirmar pela `trilha/plataforma`: alvo `kind`; namespace `amp`;
-Deployment e Service por serviço; ConfigMap com os endereços de Kafka, Postgres, Keycloak e OTLP;
-Secret com as senhas; Postgres em StatefulSet com PVC; liveness e readiness em todos — nos Java,
-`/actuator/health/liveness` e `/actuator/health/readiness` na 8080. Self-healing demonstrado
-apagando um pod e vendo o ReplicaSet recriar.
+Alvo `kind`, local e no runner do CI, namespace `amp`. Manifests puros em
+[`infra/k8s/`](../../infra/k8s/), numerados na ordem de aplicação, sem Helm nem Kustomize.
+
+| Recurso | Para quê |
+|---|---|
+| Namespace `amp` | isola tudo do trabalho; Pod Security `baseline` bloqueia, `restricted` avisa |
+| ConfigMap `amp-config` | endereços de Kafka, Postgres, Keycloak e OTLP, opções da JVM |
+| Secret `amp-banco` | senha do superusuário e de cada usuário de serviço |
+| StatefulSet + **PVC** | Postgres e Kafka: identidade estável e disco que sobrevive ao pod |
+| Deployment + Service | os 5 serviços e a SPA; o BFF com **2 réplicas** |
+
+**O que sobe no cluster:** Postgres, Kafka, os cinco serviços e a SPA — o fluxo por evento roda
+inteiro dentro do cluster. **O que fica no compose:** Keycloak e a stack de observabilidade. No
+cluster os SDKs do OpenTelemetry ficam desligados (`OTEL_SDK_DISABLED=true`) e o BFF valida a
+ausência de token (401), mas não consegue validar um token sem o JWKS.
+
+Regras comuns a todos os Deployments:
+
+- `startupProbe` antes de liveness e readiness: a JVM fria leva de 20 a 60 s para subir, e sem
+  ela a liveness mataria o pod no meio do boot. Nos Java, `/actuator/health/liveness` e
+  `/actuator/health/readiness` na 8080; nos Python, `/health`
+- `requests` de CPU e memória; `limits` só de memória. Estourar memória reinicia o pod; limite de
+  CPU só estrangularia o boot da JVM
+- usuário sem root, raiz somente leitura com `/tmp` em `emptyDir`, `drop ALL` e `seccomp`
+  `RuntimeDefault`. A exceção declarada é o nginx da SPA, que a imagem oficial roda como root
+- `enableServiceLinks: false`, porque o Service `kafka` injetaria `KAFKA_PORT=tcp://...` e a
+  imagem do Kafka converte toda variável `KAFKA_*` em configuração do broker
+- init container `aguarda-postgres` nos serviços com banco, e rolling update com
+  `maxUnavailable: 0`
+
+**Self-healing** demonstrado no passo 9 do `scripts/demo.sh`: apagar o pod do crédito e ver o
+ReplicaSet recriá-lo — em torno de 7 s no kind local, de `Terminating` a `1/1 Running`.
+`scripts/k8s-local.sh` sobe o mesmo cluster do CI na máquina de qualquer um.
 
 ## Alternativas consideradas
 
@@ -97,6 +125,16 @@ execução e outra.
 produção. Descartado: custo e credencial no repositório, ou dependência da máquina de alguém. O
 kind no runner nasce e morre com o job.
 
+**Helm ou Kustomize.** Um chart deixaria o molde dos seis Deployments num lugar só. Descartados
+porque o job de deploy aplica a pasta com `kubectl apply -f`, e manifest puro é o que as aulas
+mostraram — cada recurso cobrado (Deployment, Service, ConfigMap, Secret, PVC) fica visível no
+arquivo, sem template no meio.
+
+**Keycloak e observabilidade dentro do cluster.** Seria o sistema inteiro no Kubernetes.
+Descartado pelo custo: mais 1,5 GB entre Keycloak, Collector, Tempo, Loki, Prometheus e Grafana,
+num grupo com notebooks de 8 GB e num runner que já roda o kind. O que o enunciado cobra do
+Kubernetes — orquestração e self-healing — se prova com o fluxo de domínio.
+
 **GitOps com Argo CD.** É o caminho de produção para o deploy. Fora do que as aulas cobriram
 (plano §4) — entra no slide do que não fizemos.
 
@@ -108,14 +146,22 @@ kind no runner nasce e morre com o job.
 - Um serviço sem Dockerfile falha sozinho e diz por quê, em vez de cancelar os outros.
 - O que vai para o GHCR e para o kind é exatamente o que o build produziu.
 - Cache por serviço: sem mudança de dependência, o build reaproveita a camada do Maven ou do pip.
+- O mesmo `kubectl apply -f infra/k8s/` sobe o sistema no runner e no notebook, e o fluxo por evento
+  roda dentro do cluster, com Postgres e Kafka em disco persistente.
 
 **Piorou**
 
 - **Artefatos pesados.** Exportada, a imagem do risco tem 121 MB; as seis somam perto de meio
   gigabyte por execução na `main`, e upload e download custam minutos. A retenção é de um dia.
 - **Três toolchains para manter** no pipeline, cada um com sua versão e seu cache.
-- **O deploy prova que os manifests sobem, não que o sistema funciona.** Sem Kafka e Keycloak no
-  cluster, os serviços sobem sem as dependências; o fluxo de negócio continua demonstrado no compose.
+- **O deploy prova que os manifests sobem, não o sistema inteiro.** Sem Keycloak no cluster, a
+  autenticação com token e o trace no Grafana continuam demonstrados no compose.
+- **Duas fontes do `init.sql`.** O ConfigMap do Postgres é um espelho de `infra/postgres/init.sql`;
+  mudou um, muda o outro.
+- **Um broker e um Postgres, sem réplica.** Perdeu o disco, perdeu os dados — aceitável para
+  demonstração, inaceitável em produção.
+- **Segredo versionado.** O Secret está no Git com valores de laboratório; em produção seria
+  Sealed Secrets ou External Secrets.
 - **`main` vermelha por desenho** enquanto houver serviço sem Dockerfile: o `build` falha e o
   `push` e o `deploy` não rodam.
 - **Actions de terceiros por tag de versão** (`@v7`), não por SHA: recebem correção sem mudar o
@@ -140,4 +186,6 @@ Reabrimos esta decisão se:
   filtros de caminho por serviço;
 - a `main` ficar vermelha por mais de **48 horas**, o mesmo prazo de redistribuição de trilha;
 - o job de deploy passar **uma sprint inteira** pulado ou desligado: ou volta a rodar, ou sai do
-  slide.
+  slide;
+- o self-healing levar mais de **2 minutos** para devolver o pod `Ready` — sinal de probes ou
+  recursos mal calibrados.

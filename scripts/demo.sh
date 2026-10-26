@@ -117,4 +117,28 @@ passo "8/9 · Grafana: trace atravessando BFF → serviço → fila"
 # TODO Sesaque
 
 passo "9/9 · Kubernetes: self-healing"
-# TODO Sesaque
+# Dono: Sesaque. Cluster kind de scripts/k8s-local.sh. O contexto vai explícito em todo kubectl:
+# o contexto atual da máquina pode ser um cluster de verdade.
+K8S=${K8S_CONTEXTO:-kind-amp}
+ALVO=${ALVO:-servico-credito}
+k8s() { kubectl --context "$K8S" -n amp "$@"; }
+
+if ! k8s get deployment "$ALVO" >/dev/null 2>&1; then
+  echo "  Sem o deployment $ALVO no contexto $K8S: suba o cluster com scripts/k8s-local.sh"
+else
+  antigo=$(k8s get pods -l "app=$ALVO" -o jsonpath='{.items[0].metadata.name}')
+  echo "  O Deployment pede 1 réplica de $ALVO; o pod de agora é $antigo. Apagando..."
+  echo "  (o pod apagado aparece como Error: é a JVM saindo com 143 no SIGTERM, não uma falha)"
+  k8s get pods -l "app=$ALVO" -w &
+  observador=$!
+  inicio=$(date +%s)
+  k8s delete pod "$antigo" --wait=false >/dev/null
+  # Pronto = um pod com outro nome, 1/1 Running: o ReplicaSet percebeu a falta e recriou.
+  until k8s get pods -l "app=$ALVO" --no-headers 2>/dev/null | grep -v "$antigo" | grep -q ' 1/1 .*Running'; do
+    sleep 1
+  done
+  kill "$observador" 2>/dev/null || true
+  wait "$observador" 2>/dev/null || true
+  echo "  Recriado em $(( $(date +%s) - inicio ))s, sem ninguém pedir — ReplicaSet de pé:"
+  k8s get replicaset -l "app=$ALVO" | awk 'NR == 1 || $2 > 0' | sed 's/^/    /'
+fi
