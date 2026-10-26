@@ -21,6 +21,8 @@ data:
   # A stack de observabilidade (Collector, Tempo, Loki, Prometheus, Grafana) fica no compose:
   # no cluster os SDKs ficam desligados em vez de tentar exportar para um Collector que não existe.
   OTEL_SDK_DISABLED: "true"
+  # Nos Java, desliga o agente inteiro (nem instrumenta), não só o envio.
+  OTEL_JAVAAGENT_ENABLED: "false"
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
 
   # Heap proporcional ao limite de memória do container. JDK_JAVA_OPTIONS, e não

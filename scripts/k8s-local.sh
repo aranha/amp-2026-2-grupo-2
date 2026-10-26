@@ -66,7 +66,10 @@ k apply -f "$RAIZ/infra/k8s/"
 etapa "Esperando o banco, o broker e os Deployments"
 k rollout status statefulset/postgres -n amp --timeout=180s
 k rollout status statefulset/kafka -n amp --timeout=180s
-k wait --for=condition=Available deployment --all -n amp --timeout=300s
+# rollout status, e não wait Available: num restart os pods antigos ainda contam como disponíveis.
+for deployment in $(k get deployment -n amp -o name); do
+  k rollout status "$deployment" -n amp --timeout=300s
+done
 k get pods -n amp -o wide
 
 cat <<EOF

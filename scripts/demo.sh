@@ -218,7 +218,40 @@ else
 fi
 
 passo "8/9 · Grafana: trace atravessando BFF → serviço → fila"
-# TODO Sesaque
+# Dono: Sesaque. Acha no Tempo o trace da solicitação do passo 3 pela chave da mensagem no Kafka
+# (atributo messaging.kafka.message.key, que o agente Java grava nos spans de fila) e abre no
+# Grafana: um trace só, do POST no BFF até o read model do crédito, atravessando três tópicos.
+TEMPO=${TEMPO:-http://localhost:3200}
+GRAFANA=${GRAFANA:-http://localhost:3000}
+
+if [ -z "${SOLICITACAO:-}" ]; then
+  echo "  Sem solicitação do passo 3: abra $GRAFANA/d/amp-latencia → \"Traces recentes de solicitação\""
+else
+  TRACE=""
+  for _ in 1 2 3 4 5 6 7 8 9 10; do  # o Tempo indexa em poucos segundos
+    busca=$(curl -s -G "$TEMPO/api/search" \
+      --data-urlencode "q={ span.messaging.kafka.message.key = \"$SOLICITACAO\" }" || true)
+    TRACE=$(printf '%s' "$busca" | sed -n 's/.*"traceID":"\([0-9a-f]*\)".*/\1/p' | head -1)
+    [ -n "$TRACE" ] && break
+    sleep 2
+  done
+  if [ -z "$TRACE" ]; then
+    echo "  Trace ainda não indexado no Tempo; tente de novo em alguns segundos"
+  else
+    echo "  Trace $TRACE — começa em: $(printf '%s' "$busca" \
+      | sed -n 's/.*"rootServiceName":"\([^"]*\)","rootTraceName":"\([^"]*\)".*/\1 · \2/p')"
+    echo "  Spans por serviço:"
+    printf '%s' "$busca" | grep -o '"serviceStats":{.*}}' | grep -o '"[a-z-]*":{"spanCount":[0-9]*' \
+      | sed 's/"\([^"]*\)":{"spanCount":\([0-9]*\)/    \1 · \2 spans/'
+    painel='%7B%22t%22%3A%7B%22datasource%22%3A%22tempo%22%2C%22queries%22%3A%5B%7B%22refId%22%3A%22A%22%2C%22datasource%22%3A%7B%22type%22%3A%22tempo%22%2C%22uid%22%3A%22tempo%22%7D%2C%22queryType%22%3A%22traceql%22%2C%22query%22%3A%22TRACEID%22%7D%5D%2C%22range%22%3A%7B%22from%22%3A%22now-1h%22%2C%22to%22%3A%22now%22%7D%7D%7D'
+    echo
+    echo "  No Grafana:"
+    echo "    trace       $GRAFANA/explore?schemaVersion=1&panes=${painel/TRACEID/$TRACE}"
+    echo "                → no span do risco ou do antifraude, o ícone de logs abre as linhas desse trace no Loki"
+    echo "    latência    $GRAFANA/d/amp-latencia   (p50/p95/p99 por rota do BFF)"
+    echo "    mapa        $GRAFANA/d/amp-disponibilidade   (service graph montado dos traces)"
+  fi
+fi
 
 passo "9/9 · Kubernetes: self-healing"
 # Dono: Sesaque. Cluster kind de scripts/k8s-local.sh. O contexto vai explícito em todo kubectl:

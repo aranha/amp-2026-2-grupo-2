@@ -7,6 +7,11 @@ datasources:
     access: proxy
     url: http://prometheus:9090
     isDefault: true
+    jsonData:
+      # Ponto de exemplar no gráfico de latência abre o trace daquela requisição.
+      exemplarTraceIdDestinations:
+        - name: trace_id
+          datasourceUid: tempo
 
   - name: Tempo
     type: tempo
@@ -14,11 +19,18 @@ datasources:
     access: proxy
     url: http://tempo:3200
     jsonData:
+      # Do span para os logs do mesmo serviço e do mesmo trace. Com OTLP, o Loki guarda
+      # service.name como label service_name e o trace_id como metadado estruturado.
       tracesToLogsV2:
         datasourceUid: loki
         spanStartTimeShift: '-5m'
         spanEndTimeShift: '5m'
-        filterByTraceID: true
+        customQuery: true
+        query: '{service_name="$${__span.tags["service.name"]}"} | trace_id="$${__trace.traceId}"'
+      serviceMap:
+        datasourceUid: prometheus
+      nodeGraph:
+        enabled: true
       lokiSearch:
         datasourceUid: loki
 
@@ -28,8 +40,10 @@ datasources:
     access: proxy
     url: http://loki:3100
     jsonData:
+      # Do log para o trace: o link sai do metadado trace_id, não do texto da linha.
       derivedFields:
         - name: TraceID
-          matcherRegex: '"trace_id":"(\w+)"'
+          matcherType: label
+          matcherRegex: trace_id
           url: '$${__value.raw}'
           datasourceUid: tempo

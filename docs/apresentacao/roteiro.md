@@ -61,6 +61,37 @@ com as linhas Entities, Use Cases, Boundaries e Adapters.
 | 0:35 | "Quem garante não é a boa vontade: é um teste de arquitetura que quebra o build se o domínio importar um framework. E o domínio roda sozinho — 19 casos em 34 milissegundos, sem broker e sem banco." |
 | 0:50 | "Quando não vale: serviço sem regra. Por isso o BFF não é hexagonal — lá, porta e adaptador seriam camada decorativa." |
 
+### Bloco 5 · Observabilidade e implantação — Sesaque · 1:10
+
+**Slide-âncora:** à esquerda, o caminho dos sinais da
+[ADR-010](../adr/ADR-010-opentelemetry-e-loki.md#decisão) — 5 serviços → Collector → Tempo,
+Prometheus e Loki → Grafana; à direita, a tabela de recursos de `infra/k8s/` da
+[ADR-011](../adr/ADR-011-docker-kubernetes-ci-cd.md#kubernetes). Embaixo, o grafo do CI do Guilherme.
+
+| Tempo | Fala |
+|---|---|
+| 0:00 | "Uma solicitação passa por quatro processos, dois runtimes e três tópicos. Sem correlação, cada serviço só vê o próprio pedaço. Por isso os cinco falam OpenTelemetry: os Java com o agente na imagem, sem uma linha de código; os Python com o `opentelemetry-instrument`." |
+| 0:15 | "Tudo vai para um Collector só, que manda traces para o Tempo, métricas para o Prometheus e logs para o Loki. Nenhum serviço sabe qual backend existe: trocar Loki por ELK é mudar um arquivo." |
+| 0:30 | "O ponto difícil é o Kafka. O `traceparent` precisa viajar no cabeçalho da mensagem: o agente Java faz isso sozinho, e no Python são dez linhas, com teste. O resultado é um trace único do BFF até o read model, atravessando três tópicos — está no passo 8 da demo." |
+| 0:45 | "Loki e não ELK: o Loki indexa só os labels e roda com 65 MB; o Elasticsearch indexa cada palavra e pede um giga de heap. Quando não vale: busca full-text em log histórico, auditoria — aí o ELK ganha." |
+| 0:55 | "Na implantação, o mesmo sistema sobe no Kubernetes: Postgres e Kafka em StatefulSet com volume persistente, cada serviço num Deployment com probes. Apagou um pod, o ReplicaSet recria em segundos — é o passo 9. Quando não vale: seis containers de demonstração; com nosso volume, o compose resolveria." |
+
+### Demo · passo 8 — trace no Grafana · 1:30
+
+O script acha no Tempo o trace da solicitação do passo 3 pela chave do Kafka e imprime quantos
+spans cada serviço gerou. Abrir o link do Explore: a cascata começa no `POST /v1/solicitacoes` do
+BFF, desce para o crédito e atravessa `credito.solicitacao`, `risco.elegibilidade` e
+`antifraude.analise`. Falar: "um trace, quatro serviços, Java e Python, três saltos de fila".
+Clicar no ícone de logs de um span do risco: abre no Loki só as linhas daquele trace. Fechar no
+dashboard *01 · Latência do BFF* com o p95 por rota.
+
+### Demo · passo 9 — self-healing · 0:30
+
+Cluster kind já de pé (`scripts/k8s-local.sh`). O script apaga o pod do `servico-credito` e
+mostra o `get pods -w`: o antigo vai para `Terminating` (aparece `Error`, que é só a JVM saindo com
+143), o ReplicaSet cria outro e ele fica `1/1 Running` em poucos segundos. Falar: "ninguém mandou
+recriar; o Deployment pede uma réplica e o Kubernetes corrige a diferença".
+
 ### Bloco 5 · CI/CD — Guilherme, dentro do bloco do Sesaque · 0:20
 
 **No slide do Sesaque:** o grafo do GitHub Actions de uma execução na `main`.

@@ -8,6 +8,18 @@
 
 name: amp-grupo-2
 
+# OpenTelemetry comum aos 5 serviços (ADR-010): os três sinais via OTLP gRPC para o Collector.
+# Java pelo agente embutido na imagem, Python pelo opentelemetry-instrument.
+x-otel: &otel
+  OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
+  OTEL_EXPORTER_OTLP_PROTOCOL: grpc
+  OTEL_TRACES_EXPORTER: otlp
+  OTEL_METRICS_EXPORTER: otlp
+  OTEL_LOGS_EXPORTER: otlp
+  OTEL_METRIC_EXPORT_INTERVAL: "15000"
+  OTEL_RESOURCE_ATTRIBUTES: deployment.environment=compose
+  OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED: "true"
+
 services:
 
   # ---------------------------------------------------------------- broker
@@ -148,11 +160,33 @@ services:
     command:
       - --config.file=/etc/prometheus/prometheus.yml
       - --web.enable-otlp-receiver
+      # O metrics-generator do Tempo grava service graph e span metrics por remote write.
+      - --web.enable-remote-write-receiver
+      - --enable-feature=exemplar-storage
     ports:
       - "9090:9090"
     volumes:
       - ./infra/observabilidade/prometheus.yml:/etc/prometheus/prometheus.yml:ro
       - prometheus-data:/prometheus
+
+  # Lag por consumer group, offsets por tópico e profundidade das DLQs (dashboard da fila).
+  kafka-exporter:
+    image: danielqsj/kafka-exporter:v1.8.0
+    container_name: amp-kafka-exporter
+    command: ["--kafka.server=kafka:9094", "--topic.filter=^[^_].*", "--group.filter=.*"]
+    depends_on:
+      kafka:
+        condition: service_healthy
+
+  # Conexões, transações e tamanho do banco vistos pelo Postgres (dashboard do banco).
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.16.0
+    container_name: amp-postgres-exporter
+    environment:
+      DATA_SOURCE_NAME: postgresql://amp:amp@postgres:5432/amp?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
 
   grafana:
     image: grafana/grafana:11.4.0
@@ -164,6 +198,8 @@ services:
       GF_SECURITY_ADMIN_PASSWORD: admin
       GF_AUTH_ANONYMOUS_ENABLED: "true"
       GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      # Explore liberado sem login: é onde abrem o trace do passo 8 e os logs correlacionados.
+      GF_USERS_VIEWERS_CAN_EDIT: "true"
       GF_FEATURE_TOGGLES_ENABLE: traceqlEditor
     volumes:
       - ./infra/observabilidade/grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
@@ -177,7 +213,7 @@ services:
 
   # ---------------------------------------------------------------- serviços
   # Cada dono habilita o seu na Sprint 0, com o Dockerfile multi-stage da sua trilha.
-  # Todos herdam OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317 de x-otel.
+  # Todos herdam as variáveis OTEL_* de x-otel; cada um só declara o OTEL_SERVICE_NAME.
   #
   #   bff                  → Paulo    (Java)    porta 8080
   #   servico-credito      → Vinicius (Java)    porta 8082
@@ -202,6 +238,8 @@ services:
       # Os scripts do agregado (DDD) e do read model (CQRS) entram no init junto com o legado:
       # credito_user é dono do schema credito, então cria as tabelas sem passo manual.
       SPRING_SQL_INIT_SCHEMA_LOCATIONS: classpath:schema.sql,classpath:schema-credito-ddd.sql,classpath:schema-credito-cqrs.sql
+      <<: *otel
+      OTEL_SERVICE_NAME: servico-credito
     depends_on:
       postgres:
         condition: service_healthy
@@ -229,6 +267,8 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9094
       # Reprocessar a DLQ é decisão do operador: REPROCESSAR_DLQ=true no up (README do serviço).
       REPROCESSAR_DLQ: ${REPROCESSAR_DLQ:-false}
+      <<: *otel
+      OTEL_SERVICE_NAME: servico-risco
     depends_on:
       postgres:
         condition: service_healthy
@@ -251,10 +291,8 @@ services:
     environment:
       BANCO_URL: postgresql://antifraude_user:antifraude@postgres:5432/amp
       KAFKA_BOOTSTRAP_SERVERS: kafka:9094
+      <<: *otel
       OTEL_SERVICE_NAME: servico-antifraude
-      OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4317
-      OTEL_LOGS_EXPORTER: otlp
-      OTEL_PYTHON_LOGGING_AUTO_INSTRUMENTATION_ENABLED: "true"
       OTEL_PYTHON_FASTAPI_EXCLUDED_URLS: /health
     depends_on:
       postgres:
@@ -279,6 +317,9 @@ services:
       KAFKA_BOOTSTRAP_SERVERS: kafka:9094
       CONTRACTING_ENABLE_KAFKA: "true"
       CONTRACTING_CORE_BANK_MODE: inprocess
+      <<: *otel
+      OTEL_SERVICE_NAME: servico-contratacao
+      OTEL_PYTHON_FASTAPI_EXCLUDED_URLS: /health
     depends_on:
       postgres:
         condition: service_healthy
@@ -305,6 +346,8 @@ services:
       CREDITO_URL: http://servico-credito:8080
       RISCO_URL: http://servico-risco:8080
       ANTIFRAUDE_URL: http://servico-antifraude:8084
+      <<: *otel
+      OTEL_SERVICE_NAME: bff
     depends_on:
       keycloak:
         condition: service_healthy

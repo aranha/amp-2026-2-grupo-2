@@ -134,15 +134,15 @@ três pipelines; o que falta é instrumentar os serviços e versionar manifesto 
 
 | # | Item | Dono | Prova |
 |---|---|---|---|
-| B48 | ◐ **Traces** com OTel, e para onde vão | Sesaque | pipeline `otlp → tempo` no `otel-collector.yaml`; **só o antifraude exporta** — nenhum serviço Java tem `OTEL_*` |
-| B49 | ◐ **Métricas** com OTel | Sesaque | pipeline `otlp → prometheus`; o BFF expõe `/actuator/prometheus`, mas o scrape dos Java segue **comentado** no `prometheus.yml` |
-| B50 | ◐ **Logs** com OTel | Sesaque | pipeline `otlphttp/loki` + `derivedFields` de TraceID no datasource; **falta a ADR-010** (Loki vs. ELK) |
-| B51 | ☐ **Trace atravessando a mensageria** | Sesaque | `traceparent` está no envelope do `asyncapi.yaml` e no `test_consumo.py` do antifraude, mas nenhum produtor Java o propaga |
-| B52 | ☐ Dashboard de **latência** | Sesaque | `dashboards/01-latencia.json` não existe |
-| B53 | ☐ Dashboard de **disponibilidade** | Sesaque | `02-disponibilidade.json` não existe |
-| B54 | ☐ Dashboard de **banco** | Sesaque | `03-banco.json` não existe |
-| B55 | ☐ Dashboard de **fila** | Sesaque | `04-fila.json` não existe |
-| B56 | ☐ Dashboard de **cluster** | Sesaque | `05-cluster.json` não existe |
+| B48 | ☑ **Traces** com OTel, e para onde vão | Sesaque | os 5 serviços → Collector → **Tempo**: agente Java nos 3 Java, `opentelemetry-instrument` nos 2 Python · **ADR-010** |
+| B49 | ☑ **Métricas** com OTel | Sesaque | OTLP → Collector → **Prometheus**, mais scrape do actuator, `kafka-exporter`, `postgres-exporter` e span metrics do Tempo |
+| B50 | ☑ **Logs** com OTel | Sesaque | OTLP → **Loki**, `trace_id` como metadado: log ↔ trace nos dois sentidos · **ADR-010** (Loki vs. ELK) |
+| B51 | ☑ **Trace atravessando a mensageria** | Sesaque | um trace de 24 spans: BFF → crédito → 3 tópicos → risco → antifraude (Python) → crédito; `traceparent` pelo agente nos Java e à mão nos Python (`test_rastreamento.py`, `test_consumo.py`) |
+| B52 | ☑ Dashboard de **latência** | Sesaque | `dashboards/01-latencia.json`: p50/p95/p99 por rota do BFF, traces recentes e logs |
+| B53 | ☑ Dashboard de **disponibilidade** | Sesaque | `02-disponibilidade.json`: mapa de serviços, `up`, estado dos circuit breakers, taxa de erro |
+| B54 | ☑ Dashboard de **banco** | Sesaque | `03-banco.json`: conexões por usuário de serviço, pool Hikari, p95 de query |
+| B55 | ☑ Dashboard de **fila** | Sesaque | `04-fila.json`: lag por consumer group, vazão por tópico, DLQs |
+| B56 | ☑ Dashboard de **cluster** | Sesaque | `05-cluster.json`: CPU e memória por serviço, heap, GC, threads |
 | B57 | ☑ **Docker multi-stage** | cada dono | 6 Dockerfiles, todos com 2 estágios; o do `servico-credito` entrou no #18 e o `Build` ficou verde |
 | B58 | ☑ K8s: **Deployment** | Sesaque | `infra/k8s/30-*` a `35-*`, com probes e rolling update |
 | B59 | ☑ K8s: **Service** | Sesaque | `infra/k8s/`, um por componente; headless no Postgres e no Kafka |
@@ -191,7 +191,7 @@ script — dois do Vinicius, dois do Sesaque.
 | D5 | ☐ Commands e Queries separados, leitura populada por evento | Vinicius | 0:45 | `# TODO` |
 | D6 | ◐ **Circuit breaker abrindo** ao derrubar um serviço e **fechando** quando volta | Paulo | 1:00 | escrito: derruba o antifraude, 10 chamadas, estado pelo `/actuator/health` · `CircuitBreakerDoAntifraudeTest` prova o comportamento · **não rodou ponta a ponta** |
 | D7 | ◐ Rotas **`/v1` e `/v2`** convivendo | Paulo | 0:30 | escrito: as duas respostas lado a lado + `Deprecation`/`Sunset` · `VersionamentoDaPropostaTest` · **não rodou ponta a ponta** |
-| D8 | ☐ Grafana: **trace atravessando BFF, serviço e fila** + dashboard de latência + logs correlacionados | Sesaque | 1:30 | `# TODO` — bloqueado por B48, B51 e B52 |
+| D8 | ☑ Grafana: **trace atravessando BFF, serviço e fila** + dashboard de latência + logs correlacionados | Sesaque | 1:30 | passo 8 do script: acha o trace no Tempo pela chave da solicitação e imprime o link do Explore e dos dashboards |
 | D9 | ◐ *(opcional, mas pesa)* K8s com self-healing + pipeline de CI rodando os testes | Sesaque + Guilherme | 0:30 | passo 9 implementado e rodado no kind local · falta o job `deploy` rodar na `main` |
 
 **Total: 8:30.** Folga de 30s no bloco de demo.
