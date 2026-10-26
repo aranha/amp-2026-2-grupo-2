@@ -108,10 +108,114 @@ passo "5/9 · CQRS: leitura do read model populado por evento"
 # TODO Vinicius
 
 passo "6/9 · Circuit breaker abrindo e fechando"
-# TODO Paulo
+# Dono: Paulo. O alvo é o antifraude porque é o único downstream com fallback: com ele fora, o
+# BFF degrada em vez de devolver 500 — a proposta continua respondendo, sem o bloco de análise.
+# Config em bff/src/main/resources/application.yml: janela de 10 chamadas, 50% de falha, 10s
+# aberto, 3 chamadas em half-open. O /actuator/health não pede token e traz os três breakers,
+# então a plateia vê o estado virar sem nada escondido atrás de um Bearer.
+ANTIFRAUDE=${ANTIFRAUDE:-http://localhost:8084}
+
+campo() {  # $1 = bloco do breaker, $2 = campo. O ":" no grep evita casar failureRateThreshold.
+  printf '%s' "$1" | tr ',' '\n' | grep "\"$2\":" | cut -d: -f2 | tr -d '"' | head -1 || true
+}
+
+breaker() {  # $1 = nome → só os detalhes desse breaker dentro do /actuator/health
+  curl -s "$BFF/actuator/health" \
+    | sed "s/.*\"$1\":{//" | sed 's/}}.*//' | sed 's/.*"details":{//' || true
+}
+
+estado() {  # uma linha por breaker: estado, taxa de falha e quanto da janela já encheu
+  local bloco taxa
+  bloco=$(breaker "$1")
+  taxa=$(campo "$bloco" failureRate)
+  if [ "$taxa" = "-1.0%" ]; then taxa="janela vazia"; fi
+  printf '    %-11s %-10s %-13s %s de %s chamadas\n' \
+    "$1" "$(campo "$bloco" state)" "$taxa" \
+    "$(campo "$bloco" failedCalls)" "$(campo "$bloco" bufferedCalls)"
+}
+
+breakers() { for b in credito risco antifraude; do estado "$b"; done; }
+
+chamar() {  # uma consulta à proposta → só o status HTTP
+  curl -s -o /dev/null -w '%{http_code}' -H "Authorization: Bearer ${TOKEN_MARIA:-}" \
+    "$BFF/v2/propostas/${SOLICITACAO:-}" || true
+}
+
+if [ -z "${TOKEN_MARIA:-}" ] || [ -z "${SOLICITACAO:-}" ]; then
+  echo "  Precisa do TOKEN_MARIA e da solicitação dos passos 2 e 3."
+  echo "  O estado dos breakers não depende de token, então ainda dá para mostrar:"
+  breakers
+else
+  echo "  Fechados, antes de derrubar nada:"
+  breakers
+
+  echo
+  echo "  docker stop amp-servico-antifraude"
+  docker stop amp-servico-antifraude >/dev/null 2>&1 || true
+
+  echo "  Dez chamadas a /v2/propostas — é exatamente o tamanho da janela:"
+  linha="   "
+  for _ in 1 2 3 4 5 6 7 8 9 10; do linha="$linha $(chamar)"; done
+  echo "$linha"
+  echo "    Nenhum 500: o fallback do AntifraudeClient devolve a proposta sem a análise."
+
+  echo
+  echo "  Aberto — o BFF parou de bater no serviço caído:"
+  breakers
+  echo "    E avisa o cliente de que a degradação é parcial:"
+  curl -s -H "Authorization: Bearer $TOKEN_MARIA" "$BFF/v2/propostas/$SOLICITACAO" \
+    | grep -o '"antifraudeIndisponivel":[a-z]*' | sed 's/^/      /' || true
+
+  echo
+  echo "  docker start amp-servico-antifraude"
+  docker start amp-servico-antifraude >/dev/null 2>&1 || true
+  for _ in $(seq 1 40); do curl -fsS -o /dev/null "$ANTIFRAUDE/health" 2>/dev/null && break; sleep 1; done
+
+  echo "  Esperando a janela de 10s — o Resilience4j vai sozinho para half-open:"
+  for _ in $(seq 1 25); do
+    [ "$(campo "$(breaker antifraude)" state)" = "OPEN" ] || break
+    sleep 1
+  done
+  breakers
+
+  echo "    Três chamadas, que é o que half-open deixa passar:"
+  linha="     "
+  for _ in 1 2 3; do linha="$linha $(chamar)"; done
+  echo "$linha"
+
+  echo
+  echo "  Fechado de novo, sem ninguém mexer em nada:"
+  breakers
+fi
 
 passo "7/9 · /v1 e /v2 convivendo"
-# TODO Paulo
+# Dono: Paulo. A mesma proposta nas duas versões, no mesmo BFF. A v1 devolve os campos planos
+# que o cliente antigo espera; a v2 põe as condições num objeto e acrescenta o cet. Tirar
+# "taxa" do topo quebra quem já lê de lá — é breaking change, e é por isso que existe uma v2
+# inteira em vez de um campo novo na v1. A v1 não morre: avisa, com Deprecation e Sunset.
+
+if [ -z "${TOKEN_MARIA:-}" ] || [ -z "${SOLICITACAO:-}" ]; then
+  echo "  Precisa do TOKEN_MARIA e da solicitação dos passos 2 e 3."
+else
+  CABECALHOS=$(mktemp)
+
+  echo "  GET /v1/propostas/$SOLICITACAO"
+  curl -s -D "$CABECALHOS" -H "Authorization: Bearer $TOKEN_MARIA" \
+    "$BFF/v1/propostas/$SOLICITACAO" | sed 's/^/    /' || true
+  echo
+
+  echo "  O que a v1 responde a quem ainda está nela:"
+  grep -iE '^(deprecation|sunset|link):' "$CABECALHOS" | sed 's/^/    /' || true
+  rm -f "$CABECALHOS"
+  echo
+
+  echo "  GET /v2/propostas/$SOLICITACAO"
+  curl -s -H "Authorization: Bearer $TOKEN_MARIA" \
+    "$BFF/v2/propostas/$SOLICITACAO" | sed 's/^/    /' || true
+  echo
+  echo "    taxa e parcelas saem do topo e viram condicoes, com o cet junto."
+  echo "    Mesma rota, mesmo token, duas versões servidas ao mesmo tempo."
+fi
 
 passo "8/9 · Grafana: trace atravessando BFF → serviço → fila"
 # TODO Sesaque
