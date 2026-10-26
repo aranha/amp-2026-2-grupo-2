@@ -18,7 +18,7 @@ Template: [ADR-000-template.md](ADR-000-template.md)
 | [008](ADR-008-bff-agregacao-resiliencia-versionamento.md) | BFF: agregação, resiliência e versionamento de API | Paulo | ✅ |
 | [009](ADR-009-keycloak-oauth2-oidc-pkce.md) | Keycloak, OAuth2/OIDC e PKCE | Rafael | ✅ |
 | 010 | OpenTelemetry e Loki em vez de ELK | Sesaque | ☐ |
-| [011](ADR-011-docker-kubernetes-ci-cd.md) | Docker multi-stage, Kubernetes e CI/CD | Sesaque + Guilherme | ✅ CI/CD · ☐ K8s |
+| [011](ADR-011-docker-kubernetes-ci-cd.md) | Docker multi-stage, Kubernetes e CI/CD | Sesaque + Guilherme | ✅ |
 
 **Herança.** As ADRs da disciplina anterior, que sustentam o modelo de eventos reaproveitado,
 estão em [`../heranca-aed/adr-aed/`](../heranca-aed/adr-aed/). Elas continuam valendo para o

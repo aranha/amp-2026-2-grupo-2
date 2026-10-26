@@ -1,0 +1,126 @@
+# BFF (Paulo): a borda do sistema, a única porta que a SPA conhece. Duas réplicas atrás do
+# Service: apagar um pod não derruba a borda, o outro segue atendendo.
+#
+# Keycloak fica no compose (ADR-011): no cluster o BFF sobe e responde 401 sem token, mas
+# validar um token exige o JWKS, que só existe com o Keycloak de pé.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bff
+  namespace: amp
+  labels:
+    app: bff
+    app.kubernetes.io/name: bff
+    app.kubernetes.io/component: borda
+    app.kubernetes.io/part-of: amp-credito
+spec:
+  replicas: 2
+  revisionHistoryLimit: 3
+  # Sobe o novo antes de derrubar o antigo: a troca de versão não deixa o serviço sem pod pronto.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: bff
+  template:
+    metadata:
+      labels:
+        app: bff
+        app.kubernetes.io/name: bff
+        app.kubernetes.io/component: borda
+        app.kubernetes.io/part-of: amp-credito
+    spec:
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 101
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: bff
+          # Contrato com o job deploy do CI: a imagem é carregada no kind pelo próprio pipeline,
+          # então IfNotPresent — com Always o nó tentaria baixar do GHCR (ADR-011).
+          image: ghcr.io/aranha/amp-2026-2-grupo-2/bff:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: SERVER_PORT
+              value: "8080"
+            - name: OIDC_ISSUER
+              valueFrom:
+                configMapKeyRef: { name: amp-config, key: OIDC_ISSUER }
+            - name: OIDC_JWKS
+              value: http://keycloak:8080/realms/credito/protocol/openid-connect/certs
+            - name: OIDC_AUDIENCE
+              valueFrom:
+                configMapKeyRef: { name: amp-config, key: OIDC_AUDIENCE }
+            - name: CORS_ORIGENS
+              value: http://localhost:5173
+            - name: CREDITO_URL
+              value: http://servico-credito:8080
+            - name: RISCO_URL
+              value: http://servico-risco:8080
+            - name: ANTIFRAUDE_URL
+              value: http://servico-antifraude:8084
+            - name: JDK_JAVA_OPTIONS
+              valueFrom:
+                configMapKeyRef: { name: amp-config, key: JDK_JAVA_OPTIONS }
+            - name: OTEL_SERVICE_NAME
+              value: bff
+            - name: OTEL_SDK_DISABLED
+              valueFrom:
+                configMapKeyRef: { name: amp-config, key: OTEL_SDK_DISABLED }
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef: { name: amp-config, key: OTEL_EXPORTER_OTLP_ENDPOINT }
+          # startup segura liveness e readiness até o Spring subir: JVM fria leva de 20 a 60 s,
+          # e sem ela a liveness mataria o pod no meio do boot.
+          startupProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            periodSeconds: 5
+            failureThreshold: 36
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: http }
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: { cpu: 100m, memory: 384Mi }
+            limits: { memory: 768Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          # Raiz somente leitura; o único lugar gravável é o /tmp (Tomcat, uvicorn).
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: bff
+  namespace: amp
+  labels:
+    app.kubernetes.io/name: bff
+    app.kubernetes.io/part-of: amp-credito
+spec:
+  selector:
+    app: bff
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

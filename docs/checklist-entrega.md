@@ -65,7 +65,7 @@ três dos quatro diagramas C4; `arquitetura.md` ainda é esqueleto — o conteú
 | B3 | ☑ Pelo menos **duas linguagens/runtimes** e o motivo de cada | Paulo | **ADR-003** · Java em `bff`, `servico-credito`, `servico-risco`; Python em `servico-antifraude`, `servico-contratacao` |
 | B4 | ◐ Eixo **comunicação**: síncrona e assíncrona | Paulo | `plano-de-trabalho.md` §3.2 e §3.3; `arquitetura.md` §3 vazio |
 | B5 | ☑ Eixo **dados**: Database per Service | Vinicius | **ADR-002** · `infra/postgres/init.sql`: 4 schemas, 4 usuários |
-| B6 | ◐ Eixo **implantação**: containers e orquestração | Sesaque | **ADR-011** escrita; `infra/k8s/` só tem README |
+| B6 | ☑ Eixo **implantação**: containers e orquestração | Sesaque | **ADR-011** (Docker, Kubernetes, CI/CD) · `infra/k8s/` |
 | B7 | ☐ **C4 nível 1** — Contexto | Paulo | `n1-contexto.*` não existe |
 | B8 | ☐ **C4 nível 2** — Container | Paulo | `n2-container.*` não existe |
 | B9 | ◐ **C4 nível 3** — Componente de pelo menos um serviço | Paulo + Vinicius | `n3-componente-credito` ☑ com `README-n3-credito.md`; `n3-componente-bff` ☐ |
@@ -143,11 +143,11 @@ três pipelines; o que falta é instrumentar os serviços e versionar manifesto 
 | B54 | ☐ Dashboard de **banco** | Sesaque | `03-banco.json` não existe |
 | B55 | ☐ Dashboard de **fila** | Sesaque | `04-fila.json` não existe |
 | B56 | ☐ Dashboard de **cluster** | Sesaque | `05-cluster.json` não existe |
-| B57 | ◐ **Docker multi-stage** | cada dono | 5 Dockerfiles, todos com 2 estágios · **`servico-credito` não tem o seu** — é o que quebra a CI |
-| B58 | ☐ K8s: **Deployment** | Sesaque | `infra/k8s/` só tem README |
-| B59 | ☐ K8s: **Service** | Sesaque | idem |
-| B60 | ☐ K8s: **ConfigMap e Secret** | Sesaque | idem |
-| B61 | ☐ K8s: **self-healing** | Sesaque | depende de B58 |
+| B57 | ☑ **Docker multi-stage** | cada dono | 6 Dockerfiles, todos com 2 estágios; o do `servico-credito` entrou no #18 e o `Build` ficou verde |
+| B58 | ☑ K8s: **Deployment** | Sesaque | `infra/k8s/30-*` a `35-*`, com probes e rolling update |
+| B59 | ☑ K8s: **Service** | Sesaque | `infra/k8s/`, um por componente; headless no Postgres e no Kafka |
+| B60 | ☑ K8s: **ConfigMap e Secret** | Sesaque | `infra/k8s/10-configmap.yaml` · `11-secret.yaml` |
+| B61 | ☑ K8s: **self-healing** | Sesaque | `scripts/demo.sh` passo 9: `kubectl delete pod` → recriado em ~7 s no kind |
 | B62 | ◐ **CI/CD**: teste, build, push e deploy | Guilherme | `ci.yml` tem os 4 jobs; **`main` vermelha** no build do crédito, então `push` e `deploy` nunca executaram |
 
 ### B.6 Itens da ementa sem aula própria — citar em um slide
@@ -174,7 +174,7 @@ Dependem dos slides, que ainda não existem. Onde a implementação já prova o 
 | C1 | ◐ **3 a 4 serviços de domínio + 1 BFF** | todos | os 4 + BFF existem no repositório; **`servico-credito` não containeriza** |
 | C2 | ☑ Em **pelo menos 2 linguagens** | todos | Java ×3, Python ×2 |
 | C3 | ☑ Cada um com **seu schema ou banco** | Sesaque | `init.sql`: 4 schemas, 4 usuários, `GRANT` restrito |
-| C4 | ◐ Um `docker compose up` sobe **tudo**: IdP, broker e stack de observabilidade | Sesaque | infra completa ☑ (Kafka, Postgres, Keycloak, Collector, Tempo, Loki, Prometheus, Grafana) · `--profile apps` sobe **4 dos 5** serviços |
+| C4 | ☑ Um `docker compose up` sobe **tudo**: IdP, broker e stack de observabilidade | Sesaque | infra completa (Kafka, Postgres, Keycloak, Collector, Tempo, Loki, Prometheus, Grafana) · `--profile apps` sobe os **5** serviços, a SPA e o BFF, todos `healthy` |
 | C5 | ☑ Testes unitários do domínio **sem framework nem banco** | cada dono | `SolicitacaoDeCreditoTest`, `CalculadoraCondicoesCreditoTest`, `RegraDeDependenciaTest`, `test_dominio.py` — verdes no CI |
 
 ### Os nove passos da demo
@@ -184,7 +184,7 @@ script — dois do Vinicius, dois do Sesaque.
 
 | # | Passo | Dono | Tempo | Estado |
 |---|---|---|---|---|
-| D1 | ◐ `docker compose up` de pé, containers à vista | Sesaque | 0:30 | `docker compose ps` no script; faltará o crédito na tela |
+| D1 | ☑ `docker compose up` de pé, containers à vista | Sesaque | 0:30 | `docker compose ps` no script, com o crédito desde o #18 |
 | D2 | ☑ Login no Keycloak → BFF com **200**, **401** sem token, **403** com role errada | Rafael | 1:30 | implementado, com plano B por `TOKEN_ANA`/`TOKEN_MARIA` |
 | D3 | ☑ Fluxo ponta a ponta por evento: A publica, B e C consomem, visível no Kafka UI | Hugo | 1:30 | implementado: consome os tópicos e imprime `ce_type`, `ce_source` e partição |
 | D4 | ☐ Regra de domínio protegida pelo agregado — **409** ao aceitar duas vezes | Vinicius | 0:45 | `# TODO` |
@@ -192,7 +192,7 @@ script — dois do Vinicius, dois do Sesaque.
 | D6 | ◐ **Circuit breaker abrindo** ao derrubar um serviço e **fechando** quando volta | Paulo | 1:00 | escrito: derruba o antifraude, 10 chamadas, estado pelo `/actuator/health` · `CircuitBreakerDoAntifraudeTest` prova o comportamento · **não rodou ponta a ponta** |
 | D7 | ◐ Rotas **`/v1` e `/v2`** convivendo | Paulo | 0:30 | escrito: as duas respostas lado a lado + `Deprecation`/`Sunset` · `VersionamentoDaPropostaTest` · **não rodou ponta a ponta** |
 | D8 | ☐ Grafana: **trace atravessando BFF, serviço e fila** + dashboard de latência + logs correlacionados | Sesaque | 1:30 | `# TODO` — bloqueado por B48, B51 e B52 |
-| D9 | ☐ *(opcional, mas pesa)* K8s com self-healing + pipeline de CI rodando os testes | Sesaque + Guilherme | 0:30 | `# TODO` — bloqueado por B58 |
+| D9 | ◐ *(opcional, mas pesa)* K8s com self-healing + pipeline de CI rodando os testes | Sesaque + Guilherme | 0:30 | passo 9 implementado e rodado no kind local · falta o job `deploy` rodar na `main` |
 
 **Total: 8:30.** Folga de 30s no bloco de demo.
 

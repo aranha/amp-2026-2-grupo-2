@@ -1,0 +1,132 @@
+# Serviço de risco (Guilherme): análise de elegibilidade, Hexagonal.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: servico-risco
+  namespace: amp
+  labels:
+    app: servico-risco
+    app.kubernetes.io/name: servico-risco
+    app.kubernetes.io/component: dominio
+    app.kubernetes.io/part-of: amp-credito
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  # Sobe o novo antes de derrubar o antigo: a troca de versão não deixa o serviço sem pod pronto.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: servico-risco
+  template:
+    metadata:
+      labels:
+        app: servico-risco
+        app.kubernetes.io/name: servico-risco
+        app.kubernetes.io/component: dominio
+        app.kubernetes.io/part-of: amp-credito
+    spec:
+      enableServiceLinks: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 100
+        runAsGroup: 101
+        seccompProfile: { type: RuntimeDefault }
+      # Sem banco o serviço cai no boot (schema.sql roda na subida). Esperar aqui evita uma
+      # sequência de CrashLoopBackOff só porque o Postgres ainda está inicializando.
+      initContainers:
+        - name: aguarda-postgres
+          image: postgres:16-alpine
+          command: ["sh", "-c", "until pg_isready -h postgres -p 5432 -U amp -t 2; do echo aguardando postgres; sleep 2; done"]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { memory: 32Mi }
+      containers:
+        - name: servico-risco
+          # Contrato com o job deploy do CI: a imagem é carregada no kind pelo próprio pipeline,
+          # então IfNotPresent — com Always o nó tentaria baixar do GHCR (ADR-011).
+          image: ghcr.io/aranha/amp-2026-2-grupo-2/servico-risco:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: SERVER_PORT
+              value: "8080"
+            - name: BANCO_URL
+              valueFrom:
+                configMapKeyRef: { name: amp-config, key: BANCO_URL_JDBC }
+            - name: BANCO_USUARIO
+              value: risco_user
+            - name: BANCO_SENHA
+              valueFrom:
+                secretKeyRef: { name: amp-banco, key: RISCO_SENHA }
+            - name: KAFKA_BOOTSTRAP_SERVERS
+              valueFrom:
+                configMapKeyRef: { name: amp-config, key: KAFKA_BOOTSTRAP_SERVERS }
+            - name: JDK_JAVA_OPTIONS
+              valueFrom:
+                configMapKeyRef: { name: amp-config, key: JDK_JAVA_OPTIONS }
+            - name: OTEL_SERVICE_NAME
+              value: servico-risco
+            - name: OTEL_SDK_DISABLED
+              valueFrom:
+                configMapKeyRef: { name: amp-config, key: OTEL_SDK_DISABLED }
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              valueFrom:
+                configMapKeyRef: { name: amp-config, key: OTEL_EXPORTER_OTLP_ENDPOINT }
+            - name: REPROCESSAR_DLQ
+              value: "false"
+          # startup segura liveness e readiness até o Spring subir: JVM fria leva de 20 a 60 s,
+          # e sem ela a liveness mataria o pod no meio do boot.
+          startupProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            periodSeconds: 5
+            failureThreshold: 36
+          livenessProbe:
+            httpGet: { path: /actuator/health/liveness, port: http }
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          readinessProbe:
+            httpGet: { path: /actuator/health/readiness, port: http }
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            requests: { cpu: 100m, memory: 384Mi }
+            limits: { memory: 768Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          # Raiz somente leitura; o único lugar gravável é o /tmp (Tomcat, uvicorn).
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: servico-risco
+  namespace: amp
+  labels:
+    app.kubernetes.io/name: servico-risco
+    app.kubernetes.io/part-of: amp-credito
+spec:
+  selector:
+    app: servico-risco
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
