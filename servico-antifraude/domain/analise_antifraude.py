@@ -36,3 +36,8 @@ class AnaliseAntifraude:
             PONTOS_ACIMA_DAS_FAIXAS,
         )
         return cls(id, solicitacao_id, score, score < LIMITE_DE_APROVACAO, analisada_em)
+
+    @property
+    def motivo(self) -> str:
+        posicao = "abaixo do" if self.aprovada else "igual ou acima do"
+        return f"Score {self.score} {posicao} limite de aprovação ({LIMITE_DE_APROVACAO})"

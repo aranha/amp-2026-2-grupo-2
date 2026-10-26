@@ -95,17 +95,18 @@ Envelope **CloudEvents 1.0** em binary mode, herdado da disciplina anterior.
 
 | Tópico | Produtor | Consumidores (consumer group) | Chave de partição |
 |---|---|---|---|
-| `credito.solicitacao.v1` | credito | risco | `solicitacaoId` |
-| `risco.elegibilidade.v1` | risco | credito, antifraude | `solicitacaoId` |
-| `antifraude.analise.v1` | antifraude | credito | `solicitacaoId` |
-| `credito.proposta.v1` | credito | contratacao | `solicitacaoId` |
-| `contratacao.contrato.v1` | contratacao | credito | `solicitacaoId` |
-| `contratacao.liberacao.v1` | contratacao | credito | `solicitacaoId` |
-| `<topico>.dlq` | consumidor que falhou | reprocessamento manual | — |
+| `credito.solicitacao.v1` | credito | risco (`risco-credito-v1`, `risco-fluxo-creditos-v1`) | `solicitacaoId` |
+| `risco.elegibilidade.v1` | risco | credito (`credito-proposta-view-v1`), antifraude (`antifraude-analise-v1`) | `solicitacaoId` |
+| `antifraude.analise.v1` | antifraude | credito (`credito-proposta-view-v1`) | `solicitacaoId` |
+| `credito.proposta.v1` | credito | contratacao (`contratacao-proposta-v1`) | `solicitacaoId` |
+| `contratacao.contrato.v1` | contratacao | credito (`credito-proposta-view-v1`) | `solicitacaoId` |
+| `contratacao.liberacao.v1` | contratacao | credito (grupo a definir) | `solicitacaoId` |
+| `<topico>.dlq` | consumidor que falhou | reprocessamento manual (`risco-reprocessamento-dlq-v1` no risco) | a do original |
 
 3 partições por tópico. Chave `solicitacaoId` garante ordem por solicitação — que é a única ordem
 que o domínio exige. **Observer mapeado:** tópico = *Subject*, consumer group = *attach*,
-adicionar um consumidor não toca o produtor.
+adicionar um consumidor não toca o produtor. Decisão e trade-offs na
+[ADR-006](adr/ADR-006-kafka-como-barramento.md).
 
 ### 3.4 CQRS
 

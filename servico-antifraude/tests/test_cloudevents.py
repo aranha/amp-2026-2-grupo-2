@@ -64,6 +64,7 @@ def test_registro_da_analise_segue_o_contrato_cloudevents() -> None:
         "solicitacaoId": str(analise.solicitacao_id),
         "aprovada": True,
         "score": 10,
+        "motivo": analise.motivo,
         "dataAnalise": "2026-10-22T10:00:00-03:00",
     }
     assert dict(cabecalhos) == {

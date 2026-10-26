@@ -1,0 +1,114 @@
+openapi: 3.1.0
+info:
+  title: Serviço de Antifraude
+  version: 0.1.0
+paths:
+  /health:
+    get:
+      tags:
+      - operacao
+      summary: Health
+      operationId: health_health_get
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                type: object
+                title: Response Health Health Get
+  /v1/analises/{solicitacao_id}:
+    get:
+      tags:
+      - analises
+      summary: Consultar Analise
+      operationId: consultar_analise_v1_analises__solicitacao_id__get
+      parameters:
+      - name: solicitacao_id
+        in: path
+        required: true
+        schema:
+          type: string
+          format: uuid
+          title: Solicitacao Id
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AnaliseResposta'
+        '404':
+          description: Nenhuma análise registrada para a solicitação
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+components:
+  schemas:
+    AnaliseResposta:
+      properties:
+        solicitacaoId:
+          type: string
+          format: uuid
+          title: Solicitacaoid
+        aprovada:
+          type: boolean
+          title: Aprovada
+        score:
+          type: integer
+          title: Score
+        motivo:
+          type: string
+          title: Motivo
+        dataAnalise:
+          type: string
+          format: date-time
+          title: Dataanalise
+      type: object
+      required:
+      - solicitacaoId
+      - aprovada
+      - score
+      - motivo
+      - dataAnalise
+      title: AnaliseResposta
+    HTTPValidationError:
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+          title: Detail
+      type: object
+      title: HTTPValidationError
+    ValidationError:
+      properties:
+        loc:
+          items:
+            anyOf:
+            - type: string
+            - type: integer
+          type: array
+          title: Location
+        msg:
+          type: string
+          title: Message
+        type:
+          type: string
+          title: Error Type
+        input:
+          title: Input
+        ctx:
+          type: object
+          title: Context
+      type: object
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError

@@ -63,7 +63,43 @@ if [ -n "${TOKEN_MARIA:-}" ]; then
 fi
 
 passo "3/9 · Fluxo por evento: crédito → risco → antifraude → contratação"
-# TODO Hugo
+# Dono: Hugo.
+eventos() {  # $1 = solicitacaoId → tópico, produtor e partição de cada evento dessa solicitação
+  MSYS_NO_PATHCONV=1 docker exec amp-kafka /opt/kafka/bin/kafka-console-consumer.sh \
+    --bootstrap-server kafka:9094 --include '(credito|risco|antifraude|contratacao)\.[a-z.-]+\.v1' \
+    --from-beginning --timeout-ms 5000 --property print.timestamp=true --property print.partition=true \
+    --property print.headers=true --property print.key=true --property print.value=false 2>/dev/null \
+    | grep -a "$1" | sort -t: -k2 -n \
+    | awk -F'\t' '{ match($3, /ce_type:[^,]*/); t = substr($3, RSTART + 8, RLENGTH - 8)
+                    match($3, /ce_source:[^,]*/); s = substr($3, RSTART + 10, RLENGTH - 10)
+                    split($2, p, ":"); printf "    %-34s %-24s partição %s\n", t, s, p[2] }' || true
+}
+
+if [ -n "${TOKEN_MARIA:-}" ]; then
+  SOLICITACAO=$(curl -s -X POST "$BFF/v1/solicitacoes" -H "Authorization: Bearer $TOKEN_MARIA" \
+    -H 'Content-Type: application/json' -d '{"valorSolicitado": 18500.00}' \
+    | sed -n 's/.*"solicitacaoId":"\([^"]*\)".*/\1/p')
+elif [ -t 0 ]; then
+  echo "  No navegador — ${SPA:-http://localhost:5173}: maria.cliente → aba Solicitar → R\$ 18.500,00"
+  read -r -p "  solicitacaoId devolvido: " SOLICITACAO || true
+fi
+
+if [ -z "${SOLICITACAO:-}" ]; then
+  echo "  Sem solicitação: exporte TOKEN_MARIA (plano B do passo 2) ou rode num terminal interativo"
+else
+  echo "  Solicitação $SOLICITACAO — eventos com essa chave, em ordem:"
+  for _ in 1 2 3 4 5 6; do
+    lista=$(eventos "$SOLICITACAO")
+    grep -q antifraude.analise.v1 <<<"$lista" && break
+  done
+  echo "$lista"
+  echo "  No Kafka UI: ${KAFKA_UI:-http://localhost:8081} → Topics → mensagens com a chave acima"
+  if [ -n "${TOKEN_MARIA:-}" ]; then
+    echo "  Bloco antifraude do GET /v2/propostas/$SOLICITACAO:"
+    curl -s -H "Authorization: Bearer $TOKEN_MARIA" "$BFF/v2/propostas/$SOLICITACAO" \
+      | grep -o '"antifraude":{[^}]*}' | sed 's/^/    /' || true
+  fi
+fi
 
 passo "4/9 · Invariante do agregado: 409 ao aceitar a proposta duas vezes"
 # TODO Vinicius
