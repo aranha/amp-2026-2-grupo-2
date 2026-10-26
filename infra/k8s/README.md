@@ -16,7 +16,7 @@ Dono: **Sesaque** · alvo: `kind` local e o job `deploy` do CI · decisão na
 | `35-app-cliente.yaml` | Deployment + Service, nginx com a SPA |
 
 **O que fica fora do cluster:** Keycloak e a stack de observabilidade continuam no compose. No
-cluster, `OTEL_SDK_DISABLED=true` e o BFF responde 401 sem token, mas validar um token exige o
+cluster, `OTEL_SDK_DISABLED=true` e `OTEL_JAVAAGENT_ENABLED=false` desligam a instrumentação, e o BFF responde 401 sem token, mas validar um token exige o
 JWKS do Keycloak. O fluxo por evento (crédito → risco → antifraude → read model) roda inteiro
 dentro do cluster.
 

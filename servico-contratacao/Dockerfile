@@ -18,4 +18,4 @@ COPY application ./application
 COPY adapters ./adapters
 
 EXPOSE 8085
-CMD ["uvicorn", "adapters.http_api.main:app", "--host", "0.0.0.0", "--port", "8085"]
+CMD ["opentelemetry-instrument", "uvicorn", "adapters.http_api.main:app", "--host", "0.0.0.0", "--port", "8085"]

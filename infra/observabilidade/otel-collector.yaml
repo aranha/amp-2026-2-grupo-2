@@ -1,3 +1,6 @@
+# Ponto único de coleta (ADR-010): os 5 serviços mandam traces, métricas e logs por OTLP, e o
+# Collector decide para onde cada sinal vai. Trocar Loki por ELK, ou Tempo por Jaeger, muda só
+# este arquivo — nenhum serviço sabe qual backend existe.
 receivers:
   otlp:
     protocols:
@@ -7,6 +10,18 @@ receivers:
         endpoint: 0.0.0.0:4318
 
 processors:
+  # Primeiro da fila: sob pressão o Collector recusa dados em vez de morrer por falta de memória.
+  memory_limiter:
+    check_interval: 1s
+    limit_mib: 256
+    spike_limit_mib: 64
+  # Health check de 5 em 5 segundos vira metade dos traces e esconde o fluxo de negócio.
+  filter/saude:
+    error_mode: ignore
+    traces:
+      span:
+        - 'attributes["url.path"] != nil and IsMatch(attributes["url.path"], "^/(actuator|health)")'
+        - 'attributes["http.target"] != nil and IsMatch(attributes["http.target"], "^/(actuator|health)")'
   batch:
     timeout: 5s
 
@@ -15,8 +30,10 @@ exporters:
     endpoint: tempo:4317
     tls:
       insecure: true
+  # service.name vira o label job e service.instance.id o instance, no padrão do Prometheus.
   prometheus:
     endpoint: 0.0.0.0:8889
+    enable_open_metrics: true
   otlphttp/loki:
     endpoint: http://loki:3100/otlp
 
@@ -24,13 +41,13 @@ service:
   pipelines:
     traces:
       receivers: [otlp]
-      processors: [batch]
+      processors: [memory_limiter, filter/saude, batch]
       exporters: [otlp/tempo]
     metrics:
       receivers: [otlp]
-      processors: [batch]
+      processors: [memory_limiter, batch]
       exporters: [prometheus]
     logs:
       receivers: [otlp]
-      processors: [batch]
+      processors: [memory_limiter, batch]
       exporters: [otlphttp/loki]

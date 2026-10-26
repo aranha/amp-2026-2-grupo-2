@@ -75,6 +75,9 @@ spec:
             - name: OTEL_SDK_DISABLED
               valueFrom:
                 configMapKeyRef: { name: amp-config, key: OTEL_SDK_DISABLED }
+            - name: OTEL_JAVAAGENT_ENABLED
+              valueFrom:
+                configMapKeyRef: { name: amp-config, key: OTEL_JAVAAGENT_ENABLED }
             - name: OTEL_EXPORTER_OTLP_ENDPOINT
               valueFrom:
                 configMapKeyRef: { name: amp-config, key: OTEL_EXPORTER_OTLP_ENDPOINT }

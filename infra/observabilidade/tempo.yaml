@@ -15,6 +15,31 @@ compactor:
   compaction:
     block_retention: 1h
 
+# Gera métricas a partir dos próprios traces e grava no Prometheus: o service graph do Grafana
+# (quem chama quem, inclusive produtor → consumidor do Kafka) e a latência por span, que cobre
+# as queries do Java e do Python com um único nome de métrica.
+metrics_generator:
+  registry:
+    external_labels:
+      source: tempo
+  storage:
+    path: /var/tempo/generator/wal
+    remote_write:
+      - url: http://prometheus:9090/api/v1/write
+        send_exemplars: true
+  traces_storage:
+    path: /var/tempo/generator/traces
+  processor:
+    service_graphs:
+      dimensions: [messaging.system, db.system]
+    span_metrics:
+      dimensions: [db.system, messaging.destination.name, http.route]
+
+overrides:
+  defaults:
+    metrics_generator:
+      processors: [service-graphs, span-metrics]
+
 storage:
   trace:
     backend: local

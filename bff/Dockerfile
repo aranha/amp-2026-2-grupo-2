@@ -10,6 +10,14 @@ RUN mvn -B clean package -DskipTests
 FROM eclipse-temurin:21-jre-alpine
 WORKDIR /app
 
+# Agente OpenTelemetry (ADR-010): instrumenta Spring MVC, RestClient, JDBC e Kafka sem tocar no
+# código e propaga o traceparent nos cabeçalhos do Kafka. Versão e checksum fixos; desligado com
+# OTEL_SDK_DISABLED=true, como no Kubernetes.
+ADD --chmod=644 --checksum=sha256:4cff4ab46179260a61fc0d884f3f170cfbd9d2962dd260be2cff31262d0c7618 \
+    https://github.com/open-telemetry/opentelemetry-java-instrumentation/releases/download/v2.11.0/opentelemetry-javaagent.jar \
+    /app/opentelemetry-javaagent.jar
+ENV JAVA_TOOL_OPTIONS="-javaagent:/app/opentelemetry-javaagent.jar"
+
 RUN addgroup -S amp && adduser -S amp -G amp
 USER amp
 

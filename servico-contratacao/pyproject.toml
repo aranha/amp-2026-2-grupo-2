@@ -10,6 +10,11 @@ requires-python = ">=3.12,<3.13"
 dependencies = [
     "confluent-kafka>=2.6,<3.0",
     "fastapi>=0.115,<1.0",
+    "opentelemetry-distro>=0.50b0,<1.0",
+    "opentelemetry-exporter-otlp-proto-grpc>=1.29,<2.0",
+    "opentelemetry-instrumentation-fastapi>=0.50b0,<1.0",
+    "opentelemetry-instrumentation-psycopg>=0.50b0,<1.0",
+    "opentelemetry-instrumentation-system-metrics>=0.50b0,<1.0",
     "psycopg[binary]>=3.2,<4.0",
     "uvicorn[standard]>=0.30,<1.0",
 ]
