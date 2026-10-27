@@ -6,7 +6,7 @@ Dono: **Paulo** (N1, N2, N3 do BFF) · **Vinicius** (N3 do crédito)
 |---|---|---|---|
 | 1 — Contexto | [`n1-contexto`](README-n1-contexto.md) | Cliente, Analista, o sistema, Keycloak e Core Bancário | ✅ |
 | 2 — Container | [`n2-container`](README-n2-container.md) | SPA, BFF, 4 serviços, Kafka, Postgres, Keycloak, stack OTel | ✅ |
-| 3 — Componente | `n3-componente-bff` | Camadas do BFF: controllers, agregador, clients com Resilience4j | ☐ |
+| 3 — Componente | [`n3-componente-bff`](README-n3-bff.md) | Camadas do BFF: segurança, controllers, agregador e clients com Resilience4j | ✅ |
 | 3 — Componente | [`n3-componente-credito`](README-n3-credito.md) | Clean Architecture do crédito: domínio, aplicação, adaptadores | ✅ |
 
 Cada diagrama tem três arquivos: o `.drawio` editável em [diagrams.net](https://app.diagrams.net),
