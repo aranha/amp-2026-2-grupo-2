@@ -266,7 +266,9 @@ else
   antigo=$(k8s get pods -l "app=$ALVO" -o jsonpath='{.items[0].metadata.name}')
   echo "  O Deployment pede 1 réplica de $ALVO; o pod de agora é $antigo. Apagando..."
   echo "  (o pod apagado aparece como Error: é a JVM saindo com 143 no SIGTERM, não uma falha)"
-  k8s get pods -l "app=$ALVO" -w &
+  # kubectl direto, sem a função: com `k8s ... &` o $! é o subshell, e o kill deixava o watch
+  # vivo, escrevendo no terminal depois do passo.
+  kubectl --context "$K8S" -n amp get pods -l "app=$ALVO" -w &
   observador=$!
   inicio=$(date +%s)
   k8s delete pod "$antigo" --wait=false >/dev/null
