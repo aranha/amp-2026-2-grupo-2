@@ -92,10 +92,26 @@ docker compose ps
 ### 2. Os serviços
 
 ```bash
-docker compose --profile apps up -d
+docker compose --profile apps up -d --build
 ```
 
-*Cada dono habilita o seu serviço no compose na Sprint 0, junto com o Dockerfile multi-stage.*
+Sobe os cinco serviços e a SPA — e a infraestrutura, se ainda não estiver de pé. O `--build`
+reconstrói as imagens com o código atual: sem ele, depois de um `git pull`, o compose reaproveita
+as imagens antigas e roda código velho.
+
+**Leva de 3 a 5 minutos.** São 17 containers disputando a máquina, e o primeiro build ainda baixa
+as dependências do Maven. O `bff` e o `app-cliente` ficam em `Created` até o Keycloak ficar
+saudável — é esperado, não travou. Se algum container terminar `unhealthy` e os que dependem dele
+não subirem, rode o mesmo comando de novo: ele só inicia o que faltou.
+
+| Serviço | URL |
+|---|---|
+| **Aplicação (SPA)** | http://localhost:5173 |
+| BFF | http://localhost:8080 · contrato em [`docs/contratos/openapi-bff.yaml`](docs/contratos/openapi-bff.yaml) |
+
+**Login na SPA** (senha `123`): `maria.cliente` (role `cliente`) e `ana.analista` (role
+`analista`). Clients, roles e endpoints do Keycloak em
+[infra/keycloak/README.md](infra/keycloak/README.md).
 
 ### 3. A demo
 
@@ -109,7 +125,7 @@ Os nove passos do roteiro, na ordem da apresentação. Detalhe em
 ### Derrubar tudo
 
 ```bash
-docker compose down -v
+docker compose --profile apps down -v
 ```
 
 ---
