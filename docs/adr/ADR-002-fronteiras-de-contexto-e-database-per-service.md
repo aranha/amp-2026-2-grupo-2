@@ -2,7 +2,7 @@
 
 ## Status
 
-**Proposto** — sujeito à revisão e aceite do grupo no pull request.
+**Aceito** — sujeito à revisão e aceite do grupo no pull request.
 
 ## Contexto
 
